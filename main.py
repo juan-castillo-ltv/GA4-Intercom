@@ -125,7 +125,7 @@ def fetch_GA4_sessions():
         token_uri=GA4_TOKEN_URI,
         client_id=GA4_CLIENT_ID,
         client_secret=GA4_CLIENT_SECRET,
-        scopes=GA4_SCOPES
+        scopes=GA4_SCOPES.split(',')
     )
     # Initialize the GA4 client
     client = BetaAnalyticsDataClient(credentials=credentials)
