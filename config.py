@@ -14,28 +14,38 @@ OAUTH_FILE = os.getenv("OAUTH_FILE")
 APPS_CONFIG = [
     {
         "app_name": os.getenv("APP1_Name"),
-        "api_url": os.getenv("APP1_API_GA4_ID"),
-        "api_token": os.getenv("APP1_API_ICM_TOKEN")
+        "api_ga4_url": os.getenv("APP1_API_GA4_URL"),
+        "api_ga4_code": os.getenv("APP1_API_GA4_CODE"),
+        "api_icm_token": os.getenv("APP1_API_ICM_TOKEN"),
+        "api_icm_id": os.getenv("APP1_API_ICM_ID")
     },
     {
        "app_name": os.getenv("APP2_Name"),
-       "api_url": os.getenv("APP2_API_GA4_ID"),
-       "api_token": os.getenv("APP2_API_ICM_TOKEN")
+       "api_ga4_url": os.getenv("APP2_API_GA4_URL"),
+       "api_ga4_code": os.getenv("APP2_API_GA4_CODE"),
+       "api_icm_token": os.getenv("APP2_API_ICM_TOKEN"),
+       "api_icm_id": os.getenv("APP2_API_ICM_ID")
     },
     {
        "app_name": os.getenv("APP3_Name"),
-       "api_url": os.getenv("APP3_API_GA4_ID"),
-       "api_token": os.getenv("APP3_API_ICM_TOKEN")
+       "api_ga4_url": os.getenv("APP3_API_GA4_URL"),
+       "api_ga4_code": os.getenv("APP3_API_GA4_CODE"),
+       "api_icm_token": os.getenv("APP3_API_ICM_TOKEN"),
+       "api_icm_id": os.getenv("APP3_API_ICM_ID")
     },
     {
        "app_name": os.getenv("APP4_Name"),
-       "api_url": os.getenv("APP4_API_GA4_ID"),
-       "api_token": os.getenv("APP4_API_ICM_TOKEN")
+       "api_ga4_url": os.getenv("APP4_API_GA4_URL"),
+       "api_ga4_code": os.getenv("APP4_API_GA4_CODE"),
+       "api_icm_token": os.getenv("APP4_API_ICM_TOKEN"),
+       "api_icm_id": os.getenv("APP4_API_ICM_ID")
     },
     {
        "app_name": os.getenv("APP5_Name"),
-       "api_url": os.getenv("APP5_API_GA4_ID"),
-       "api_token": os.getenv("APP5_API_ICM_TOKEN")
+       "api_ga4_url": os.getenv("APP5_API_GA4_URL"),
+       "api_ga4_code": os.getenv("APP5_API_GA4_CODE"),
+       "api_icm_token": os.getenv("APP5_API_ICM_TOKEN"),
+       "api_icm_id": os.getenv("APP5_API_ICM_ID")
     },
 ]
 
