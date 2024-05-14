@@ -148,12 +148,12 @@ def fetch_GA4_sessions():
 
             url_name_filter = Filter(
                 field_name="landingPagePlusQueryString",
-                string_filter=Filter.StringFilter(value=f"{app['app_url']}", match_type=Filter.StringFilter.MatchType.BEGINS_WITH)
+                string_filter=Filter.StringFilter(value=f"{app['api_ga4_url']}", match_type=Filter.StringFilter.MatchType.BEGINS_WITH)
             )
 
             # Define the request to fetch data with filter
             request = RunReportRequest(
-                property=f"properties/{app['app_code']}",
+                property=f"properties/{app['api_ga4_code']}",
                 date_ranges=[DateRange(start_date=date, end_date=date)],
                 dimensions=dimensions,
                 metrics=[
