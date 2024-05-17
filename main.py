@@ -128,7 +128,7 @@ def fetch_GA4_sessions():
         scopes=oauth_data["scopes"],
         universe_domain=oauth_data["universe_domain"],
         account=oauth_data["account"],
-        expiry=oauth_data["expiry"]
+        expiry = datetime.datetime.strptime(oauth_data['expiry'], "%Y-%m-%dT%H:%M:%S.%fZ")
     )
     # Initialize the GA4 client
     client = BetaAnalyticsDataClient(credentials=credentials)
