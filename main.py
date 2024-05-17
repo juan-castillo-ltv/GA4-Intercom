@@ -7,7 +7,7 @@ import json
 import psycopg2
 from psycopg2 import sql
 from config import APPS_CONFIG, DB_CREDENTIALS, UPDATE_INTERVAL, TIME_DELAY, OFFSET_BT_SCRIPTS
-from config import GA4_TOKEN, GA4_REFRESH_TOKEN, GA4_TOKEN_URI, GA4_CLIENT_ID, GA4_CLIENT_SECRET, GA4_SCOPES
+from config import GA4_TOKEN, GA4_REFRESH_TOKEN, GA4_TOKEN_URI, GA4_CLIENT_ID, GA4_CLIENT_SECRET, GA4_SCOPES, GA4_UNIVERSE_DOMAIN, GA4_ACCOUNT, GA4_EXPIRY
 from apscheduler.schedulers.blocking import BlockingScheduler
 from google.analytics.data_v1beta import BetaAnalyticsDataClient
 from google.analytics.data_v1beta.types import DateRange, Dimension, Metric, RunReportRequest, FilterExpression, Filter
@@ -125,7 +125,10 @@ def fetch_GA4_sessions():
         token_uri=GA4_TOKEN_URI,
         client_id=GA4_CLIENT_ID,
         client_secret=GA4_CLIENT_SECRET,
-        scopes=GA4_SCOPES
+        scopes=GA4_SCOPES,
+        universe_domain=GA4_UNIVERSE_DOMAIN,
+        account=GA4_ACCOUNT,
+        expiry=GA4_EXPIRY
     )
     # Initialize the GA4 client
     client = BetaAnalyticsDataClient(credentials=credentials)
