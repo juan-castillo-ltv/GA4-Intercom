@@ -8,6 +8,7 @@ load_dotenv()
 UPDATE_INTERVAL = os.getenv("UPDATE_INTERVAL")
 TIME_DELAY = os.getenv("TIME_DELAY")
 OFFSET_BT_SCRIPTS = os.getenv("OFFSET_BT_SCRIPTS")
+GA4_OAUTH = os.getenv("GA4_OAUTH")
 
 # Configurations for multiple apps
 APPS_CONFIG = [

@@ -7,11 +7,7 @@ import json
 import psycopg2
 from psycopg2 import sql
 from config import APPS_CONFIG, DB_CREDENTIALS, UPDATE_INTERVAL, TIME_DELAY, OFFSET_BT_SCRIPTS
-<<<<<<< HEAD
 from config import GA4_OAUTH
-=======
-from config import GA4_TOKEN, GA4_REFRESH_TOKEN, GA4_TOKEN_URI, GA4_CLIENT_ID, GA4_CLIENT_SECRET, GA4_SCOPES, GA4_UNIVERSE_DOMAIN, GA4_ACCOUNT, GA4_EXPIRY
->>>>>>> parent of 925b6e4 (Updated Oauth credentials)
 from apscheduler.schedulers.blocking import BlockingScheduler
 from google.analytics.data_v1beta import BetaAnalyticsDataClient
 from google.analytics.data_v1beta.types import DateRange, Dimension, Metric, RunReportRequest, FilterExpression, Filter
@@ -117,7 +113,6 @@ def fetch_GA4_sessions():
     
     # Initialize OAuth2 credentials
     # Load the JSON string from the environment variable
-<<<<<<< HEAD
     oauth_json_string = GA4_OAUTH
     if oauth_json_string is None:
        raise ValueError("OAUTH_JSON environment variable is not set")
@@ -134,24 +129,6 @@ def fetch_GA4_sessions():
         universe_domain=oauth_data["universe_domain"],
         account=oauth_data["account"],
         expiry=oauth_data["expiry"]
-=======
-    # oauth_json_string = OAUTH_FILE
-    # if oauth_json_string is None:
-    #    raise ValueError("OAUTH_JSON environment variable is not set")
-    # Deserialize the JSON string into a Python dictionary
-    # oauth_data = json.loads(oauth_json_string)
-    # Create credentials object from the dictionary
-    credentials = Credentials(
-        token=GA4_TOKEN,
-        refresh_token=GA4_REFRESH_TOKEN,
-        token_uri=GA4_TOKEN_URI,
-        client_id=GA4_CLIENT_ID,
-        client_secret=GA4_CLIENT_SECRET,
-        scopes=GA4_SCOPES,
-        universe_domain=GA4_UNIVERSE_DOMAIN,
-        account=GA4_ACCOUNT,
-        expiry=GA4_EXPIRY
->>>>>>> parent of 925b6e4 (Updated Oauth credentials)
     )
     # Initialize the GA4 client
     client = BetaAnalyticsDataClient(credentials=credentials)
