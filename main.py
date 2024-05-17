@@ -39,7 +39,7 @@ def extract_query_params(url):
         'surface_type': params.get('surface_type', [None])[0]
     }
 
-def insert_sessions_into_db(df):
+def insert_ga4_into_db(df):
   i = 1
   conn = connect_to_db()  # Replace with your actual connection function
   if conn is not None:
@@ -104,6 +104,7 @@ def insert_sessions_into_db(df):
     logging.info("Done!")
   else:
     logging.info("Failed to insert data into the database.")
+    
 
 def fetch_GA4_sessions():
     #Initialize the DF and the events to be tracked
@@ -201,8 +202,108 @@ def fetch_GA4_sessions():
     # Apply the function and assign results to new columns
     df_params = df['landingPagePlusQueryString'].apply(extract_query_params)
     df = df.join(pd.json_normalize(df_params))
-    insert_sessions_into_db(df)
+    insert_ga4_into_db(df)
         
+def fetch_ga4_events():
+    #Initialize the DF and the events to be tracked
+    df = pd.DataFrame()
+    event_types = ["shopify_app_install", "Add App button"]
+    dates = [(datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")]
+    logging.info(f"Dates considered:{dates}")    
+    
+    # Initialize OAuth2 credentials
+    # Load the JSON string from the environment variable
+    oauth_json_string = GA4_OAUTH
+    if oauth_json_string is None:
+       raise ValueError("OAUTH_JSON environment variable is not set")
+    #Deserialize the JSON string into a Python dictionary
+    oauth_data = json.loads(oauth_json_string)
+    #Create credentials object from the dictionary
+    credentials = Credentials(
+        token=oauth_data["token"],
+        refresh_token=oauth_data["refresh_token"],
+        token_uri=oauth_data["token_uri"],
+        client_id=oauth_data["client_id"],
+        client_secret=oauth_data["client_secret"],
+        scopes=oauth_data["scopes"],
+        universe_domain=oauth_data["universe_domain"],
+        account=oauth_data["account"],
+        expiry = datetime.datetime.strptime(oauth_data['expiry'], "%Y-%m-%dT%H:%M:%S.%fZ")
+    )
+    # Initialize the GA4 client
+    client = BetaAnalyticsDataClient(credentials=credentials)
+
+    for date in dates:
+        for app in APPS_CONFIG:
+            for event in event_types:
+                # Initialize dimensions list
+                dimensions = [
+                    Dimension(name="eventName"),
+                    Dimension(name="landingPagePlusQueryString"),
+                    Dimension(name="dateHourMinute"),
+                    Dimension(name="sessionCampaignName"),
+                    Dimension(name="sessionSource"),
+                    Dimension(name="sessionMedium"),
+                    Dimension(name="sessionManualAdContent"),
+                ]
+
+                # Conditionally add customEvent:shop_id dimension
+                if app['app_name'] != 'SR':
+                    dimensions.append(Dimension(name="customEvent:shop_id"))
+                
+                # Define the filter for the event name
+                event_name_filter = Filter(
+                    field_name="eventName",
+                    string_filter=Filter.StringFilter(value=f"{event}", match_type=Filter.StringFilter.MatchType.EXACT)
+                )
+
+                # Define the request to fetch data with filter
+                request = RunReportRequest(
+                    property=f"properties/{app['app_code']}",
+                    date_ranges=[DateRange(start_date=date, end_date=date)],
+                    dimensions=dimensions,
+                    metrics=[
+                        Metric(name="sessions"),
+                        Metric(name="engagedSessions"),
+                        Metric(name="eventCount")
+                    ],
+                    dimension_filter=FilterExpression(filter=event_name_filter)
+                )
+
+                # Run the report
+                response = client.run_report(request)
+
+                # Prepare data for DataFrame
+                data = []
+                for row in response.rows:
+                    row_dict = {header.name: value.value for header, value in zip(response.dimension_headers, row.dimension_values)}
+                    row_dict.update({header.name: value.value for header, value in zip(response.metric_headers, row.metric_values)})
+                    data.append(row_dict)
+
+                df_temp = pd.DataFrame(data)
+                df_temp['app'] = app['app_name']
+                if app['app_name'] == 'SR':
+                    df_temp['customEvent:shop_id'] = "(not set)"
+                df = pd.concat([df, df_temp], ignore_index=True)
+
+    # Convert 'dateHourMinute' to datetime with the correct format (if needed)
+    df['dateHourMinute'] = pd.to_datetime(df['dateHourMinute'], format='%Y%m%d%H%M')
+    # Localize the datetime to Property Time without converting
+    df['dateHourMinute'] = df['dateHourMinute'].dt.tz_localize('America/New_York') # All properties are new set to New York TZ
+    # Convert 'dateHourMinute' from Property Time to UTC and assign to a new column
+    df['dateHourMinuteUTC'] = df['dateHourMinute'].dt.tz_convert('UTC')
+    # Convert 'dateHourMinute' from Property Time to EST and assign to a new column
+    df['dateHourMinuteEST'] = df['dateHourMinute'].dt.tz_convert('America/New_York')
+    # Convert datetimes to string adn gets rid of the timezone
+    df['dateHourMinute'] = df['dateHourMinute'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    df['dateHourMinuteUTC'] = df['dateHourMinuteUTC'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    df['dateHourMinuteEST'] = df['dateHourMinuteEST'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
+    # Apply the function and assign results to new columns
+    df_params = df['landingPagePlusQueryString'].apply(extract_query_params)
+    df = df.join(pd.json_normalize(df_params))
+    insert_ga4_into_db(df)
+
 
 if __name__ == "__main__":
     logging.info("Starting main execution.")
@@ -210,10 +311,12 @@ if __name__ == "__main__":
 
     # Immediate execution upon deployment
     fetch_GA4_sessions()
+    fetch_ga4_events()
     #time.sleep(int(OFFSET_BT_SCRIPTS))
     #fetch_transactions()
 
     # Schedule the tasks to run daily at 6:00 AM
-    scheduler.add_job(fetch_GA4_sessions, 'cron', hour=5, minute=0)
+    scheduler.add_job(fetch_GA4_sessions, 'cron', hour=7, minute=0)
+    scheduler.add_job(fetch_ga4_events, 'cron', hour=7, minute=0)
     #scheduler.add_job(fetch_transactions, 'cron', hour=6, minute=int(OFFSET_BT_SCRIPTS) / 60)  # Assuming OFFSET_BT_SCRIPTS is in seconds
     scheduler.start()
