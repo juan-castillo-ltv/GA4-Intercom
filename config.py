@@ -8,18 +8,6 @@ load_dotenv()
 UPDATE_INTERVAL = os.getenv("UPDATE_INTERVAL")
 TIME_DELAY = os.getenv("TIME_DELAY")
 OFFSET_BT_SCRIPTS = os.getenv("OFFSET_BT_SCRIPTS")
-OAUTH_FILE = os.getenv("OAUTH_FILE")
-
-
-GA4_TOKEN = os.getenv("GA4_TOKEN")
-GA4_REFRESH_TOKEN = os.getenv("GA4_REFRESH_TOKEN")
-GA4_TOKEN_URI = os.getenv("GA4_TOKEN_URI")
-GA4_CLIENT_ID = os.getenv("GA4_CLIENT_ID")
-GA4_CLIENT_SECRET = os.getenv("GA4_CLIENT_SECRET")
-GA4_SCOPES = os.getenv("GA4_SCOPES")
-GA4_UNIVERSE_DOMAIN = os.getenv("GA4_UNIVERSE_DOMAIN")
-GA4_ACCOUNT = os.getenv("GA4_ACCOUNT")
-GA4_EXPIRY = os.getenv("GA4_EXPIRY")
 
 # Configurations for multiple apps
 APPS_CONFIG = [
