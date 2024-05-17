@@ -259,7 +259,7 @@ def fetch_ga4_events():
 
                 # Define the request to fetch data with filter
                 request = RunReportRequest(
-                    property=f"properties/{app['app_code']}",
+                    property=f"properties/{app['api_ga4_code']}",
                     date_ranges=[DateRange(start_date=date, end_date=date)],
                     dimensions=dimensions,
                     metrics=[
