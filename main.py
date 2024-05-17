@@ -310,12 +310,12 @@ if __name__ == "__main__":
     scheduler = BlockingScheduler()
 
     # Immediate execution upon deployment
-    fetch_GA4_sessions()
-    fetch_ga4_events()
+
+    
     #time.sleep(int(OFFSET_BT_SCRIPTS))
     #fetch_transactions()
 
-    # Schedule the tasks to run daily at 6:00 AM
+    # Schedule the tasks to run daily at 7:00 AM
     scheduler.add_job(fetch_GA4_sessions, 'cron', hour=7, minute=0)
     scheduler.add_job(fetch_ga4_events, 'cron', hour=7, minute=0)
     #scheduler.add_job(fetch_transactions, 'cron', hour=6, minute=int(OFFSET_BT_SCRIPTS) / 60)  # Assuming OFFSET_BT_SCRIPTS is in seconds
