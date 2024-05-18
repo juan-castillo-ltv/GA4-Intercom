@@ -485,7 +485,7 @@ def fetch_intercom_contacts():
             df_temp = pd.DataFrame(test_contacts)
         
         # 2-app type df
-        if app['app_name'] == "COD":
+        if app['app_name'] == "SATC":
             for contact in contacts:
                 # General Attributes
                 id = contact.get('id')
@@ -520,9 +520,13 @@ def fetch_intercom_contacts():
                 })
             df_temp = pd.DataFrame(test_contacts)
 
+        # Avoid reprocessing of COD contacts for SR (SR and SATC share the same property on Intercom)
+        if app['app_name'] == "SR":
+            df_temp = pd.DataFrame() # Appends a void df to df_contacts
+
         #Appends the temporary dataframe to the main one
         df_contacts = pd.concat([df_contacts, df_temp], ignore_index=True)
-        logging.info(f"Partner {app['app_name']} processed. Total {len(contacts)} contacts")
+        logging.info(f"Partner {app['app_name']} processed. Total {len(contacts)} contacts. For COD all contacts are processed and segregated (SATC-SR) within SATC")
     
     logging.info(f"Done! Total contacts: {len(df_contacts)}")
     # Update these columns to datetime instead of Unix timestamps, replaces NaN and NaT with None
