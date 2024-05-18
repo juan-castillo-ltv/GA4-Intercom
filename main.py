@@ -526,7 +526,7 @@ def fetch_intercom_contacts():
 
         #Appends the temporary dataframe to the main one
         df_contacts = pd.concat([df_contacts, df_temp], ignore_index=True)
-        logging.info(f"Partner {app['app_name']} processed. Total {len(contacts)} contacts. For COD all contacts are processed and segregated (SATC-SR) within SATC")
+        logging.info(f"Partner {app['app_name']} processed. Total {len(test_contacts)} contacts. For COD all contacts are processed and segregated (SATC-SR) within SATC")
     
     logging.info(f"Done! Total contacts: {len(df_contacts)}")
     # Update these columns to datetime instead of Unix timestamps, replaces NaN and NaT with None
