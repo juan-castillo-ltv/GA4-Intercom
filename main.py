@@ -544,7 +544,7 @@ if __name__ == "__main__":
     scheduler = BlockingScheduler()
 
     # Immediate execution upon deployment
-    fetch_intercom_contacts()
+    
     #time.sleep(int(OFFSET_BT_SCRIPTS))
     #fetch_transactions()
 
