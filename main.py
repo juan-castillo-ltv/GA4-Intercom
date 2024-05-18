@@ -7,6 +7,7 @@ import logging
 import json
 import psycopg2
 from psycopg2 import sql
+from sqlalchemy import create_engine, text
 from config import APPS_CONFIG, DB_CREDENTIALS, UPDATE_INTERVAL, TIME_DELAY, OFFSET_BT_SCRIPTS
 from config import GA4_OAUTH
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -25,6 +26,25 @@ def connect_to_db():
     except Exception as e:
         logging.error(f"Failed to connect to the database: {str(e)}")
         return None
+
+
+def connect_to_db_sqlalchemy(): 
+    try:
+        # Construct the connection string
+        user = DB_CREDENTIALS['user']
+        password = DB_CREDENTIALS['password']
+        host = DB_CREDENTIALS['host']
+        dbname = DB_CREDENTIALS['database']
+        port = DB_CREDENTIALS['port']
+        sslmode = DB_CREDENTIALS['sslmode']
+        connection_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
+        # Create and return the engine
+        engine = create_engine(connection_string)
+        return engine
+    except Exception as e:
+        print(f"Failed to create engine: {e}")
+        raise  # Raise an exception to be handled where connect_to_db is called
+
 
 # Function to parse URL and extract query parameters
 def extract_query_params(url):
@@ -539,18 +559,174 @@ def fetch_intercom_contacts():
     insert_intercom_contacts_into_db(df_contacts)
 
 
+def update_intercom_contacts():
+    for app in APPS_CONFIG:
+        df = pd.DataFrame() # Create an empty dataframe
+        # Connect to the database
+        engine = connect_to_db_sqlalchemy() #SQLAlchemy is needed for this connection type, instead of psycopg2
+        # SQL query
+        query = f"SELECT * FROM intercom_customer_list_{app['app_name'].lower()};"
+        with engine.connect() as connection:
+            result = connection.execute(text(query))
+            df = pd.DataFrame(result.fetchall())
+            df.columns = result.keys()        
+        # Convert datetime columns to string in ISO 8601 format
+        datetime_cols = ['installed_at', 'uninstalled_at', 'last_subscription_charged_at', 'store_open_at', 'store_closed_at', 'first_install']  # Add all datetime columns
+        for col in datetime_cols:
+            df[col] = df[col].apply(lambda x: x.isoformat() if pd.notnull(x) else None)
+        logging.info(f"App {app['app_name']} DB table processed. Total contacts: {len(df)}")
+        # Update the contacts using Intercom API
+        headers = {
+            "Content-Type": "application/json",
+            "Intercom-Version": "2.11",
+            "Authorization": app['api_icm_token']
+            }
+        base_url = "https://api.intercom.io/contacts"
+        for index, row in df.iterrows():
+            logging.info(f"Updating record {int(index)+1}/{len(df)} for {app['app_name']}")
+            url = f"{base_url}/{row['id']}" # ID needed to update - ids used for testing ONLY - PROD row['id']
+            
+            # Creates the payload depending on the app
+            if app['app_name'] == "SR" or app['app_name'] == "SATC":
+                payload = {
+                    "email": row['email'],  
+                    "name": row['shop_name'],
+                    "custom_attributes": {
+                        "App name": row['app_name'], #Comes from the app name column for COD, for the rest is disposable
+                        "Plan display name": row['shopify_plan'],
+                        "Shop name": row['shop_url'], 
+                        "shop_url": row['shop_url'], # Same as shop name
+                        "active": row['active'],
+                        "installed_at": row['installed_at'],
+                        "uninstalled_at": row['uninstalled_at'], #This could be NaT
+                        "last_subscription_charged_at": row['last_subscription_charged_at'],
+                        "number_of_subscription_charges":row['number_of_subscription_charges'] if pd.notnull(row['number_of_subscription_charges']) else None,
+                        "subscription_charge": str(row['subscription_charge']),
+                        "first_install": row['first_install'],
+                        "store_open_at": row['store_open_at'],
+                        "store_closed_at": row['store_closed_at'],
+                        "is_open": row['is_open'],
+                        "days_uninstalled": int(row['days_uninstalled']),
+                        "days_closed": int(row['days_closed']),
+                        "trial_days_remaining": row['trial_days_remaining'],
+                        "days_since_billed": row['days_since_billed'],
+                        "paid_active": row['paid_active'],
+                        #"plan": row['plan'], ### FOR PC ONLY
+                        "time_closed": int(row['time_closed']),
+                        "time_uninstalled": int(row['time_uninstalled']),
+                        "shopify_url_raw": row['shopify_url_raw'] # Just for COD
+                    }
+                }
+            if app['app_name'] == "PC":
+                payload = {
+                    "email": row['email'],  
+                    "name": row['shop_name'],
+                    "custom_attributes": {
+                        # "App name": row['app_name'], #Comes from the app name column for COD, for the rest is disposable
+                        "shopify_plan": row['shopify_plan'],
+                        #"Shop name": row['shop_url'], # Not needed for PC
+                        "shop_url": row['shop_url'], # Same as shop name
+                        "active": row['active'],
+                        "installed_at": row['installed_at'],
+                        "uninstalled_at": row['uninstalled_at'], #This could be NaT
+                        "last_subscription_charged_at": row['last_subscription_charged_at'],
+                        "number_of_subscription_charges":row['number_of_subscription_charges'] if pd.notnull(row['number_of_subscription_charges']) else None,
+                        "subscription_charge": str(row['subscription_charge']),
+                        "first_install": row['first_install'],
+                        "store_open_at": row['store_open_at'],
+                        "store_closed_at": row['store_closed_at'],
+                        "is_open": row['is_open'],
+                        "days_uninstalled": int(row['days_uninstalled']),
+                        "days_closed": int(row['days_closed']),
+                        "trial_days_remaining": row['trial_days_remaining'],
+                        "days_since_billed": row['days_since_billed'],
+                        "paid_active": row['paid_active'],
+                        "plan": row['plan'], ### FOR PC ONLY
+                        "time_closed": int(row['time_closed']),
+                        "time_uninstalled": int(row['time_uninstalled']),
+                        #"shopify_url_raw": row['shopify_url_raw'] # Just for COD
+                    }
+                }
+            if app['app_name'] == "ICU":
+                payload = {
+                    "email": row['email'],  
+                    "name": row['shop_name'],
+                    "custom_attributes": {
+                        # "App name": row['app_name'], #Comes from the app name column for COD, for the rest is disposable
+                        "shopify_plan": row['shopify_plan'],
+                        # "Shop name": row['shop_url'], # Not needed for ICU
+                        "shop_url": row['shop_url'], # Same as shop name
+                        "active": row['active'],
+                        "installed_at": row['installed_at'],
+                        "uninstalled_at": row['uninstalled_at'], #This could be NaT
+                        "last_subscription_charged_at": row['last_subscription_charged_at'],
+                        "number_of_subscription_charges":row['number_of_subscription_charges'] if pd.notnull(row['number_of_subscription_charges']) else None,
+                        "subscription_charge": str(row['subscription_charge']),
+                        "first_install": row['first_install'],
+                        "store_open_at": row['store_open_at'],
+                        "store_closed_at": row['store_closed_at'],
+                        "is_open": row['is_open'],
+                        "days_uninstalled": int(row['days_uninstalled']),
+                        "days_closed": int(row['days_closed']),
+                        "trial_days_remaining": row['trial_days_remaining'],
+                        "days_since_billed": row['days_since_billed'],
+                        "paid_active": row['paid_active'],
+                        #"plan": row['plan'], ### FOR PC ONLY
+                        "time_closed": int(row['time_closed']),
+                        "time_uninstalled": int(row['time_uninstalled']),
+                        #"shopify_url_raw": row['shopify_url_raw'] # Just for COD
+                    }
+                }
+            if app['app_name'] == "TFX":
+                payload = {
+                    "email": row['email'],  
+                    "name": row['shop_name'],
+                    "custom_attributes": {
+                        # "App name": row['app_name'], #Comes from the app name column for COD, for the rest is disposable
+                        "plan_display_name": row['shopify_plan'],
+                        "shop_url": row['shop_url'], 
+                        "shopify_url": row['shop_url'], # Same as shop name
+                        "active": row['active'],
+                        "installed_at": row['installed_at'],
+                        "uninstalled_at": row['uninstalled_at'], #This could be NaT
+                        "last_subscription_charged_at": row['last_subscription_charged_at'],
+                        "number_of_subscription_charges":row['number_of_subscription_charges'] if pd.notnull(row['number_of_subscription_charges']) else None,
+                        "subscription_charge": str(row['subscription_charge']),
+                        "first_install": row['first_install'],
+                        "store_open_at": row['store_open_at'],
+                        "store_closed_at": row['store_closed_at'],
+                        "is_open": row['is_open'],
+                        "days_uninstalled": int(row['days_uninstalled']),
+                        "days_closed": int(row['days_closed']),
+                        "trial_days_remaining": row['trial_days_remaining'],
+                        "days_since_billed": row['days_since_billed'],
+                        "paid_active": row['paid_active'],
+                        #"plan": row['plan'], ### FOR PC ONLY
+                        "time_closed": int(row['time_closed']),
+                        "time_uninstalled": int(row['time_uninstalled']),
+                        #"shopify_url_raw": row['shopify_url_raw'] # Just for COD
+                    }
+                }
+            # Update the contacts
+            response = requests.put(url, json=payload, headers=headers)
+            data = response.json()
+            logging.info(data)
+        logging.info(f"App {app['app_name']} contacts updated. Total contacts: {len(df)}")
+    
+
+
 if __name__ == "__main__":
     logging.info("Starting main execution.")
     scheduler = BlockingScheduler()
 
     # Immediate execution upon deployment
-    
+    update_intercom_contacts()
     #time.sleep(int(OFFSET_BT_SCRIPTS))
-    #fetch_transactions()
 
-    # Schedule the tasks to run daily at 7:00 AM
+    # Schedule the tasks to run daily at 12:00 PM UTC TIME
     scheduler.add_job(fetch_GA4_sessions, 'cron', hour=12, minute=0)
     scheduler.add_job(fetch_ga4_events, 'cron', hour=12, minute=2)
-    scheduler.add_job(fetch_ga4_events, 'cron', hour=12, minute=4)
+    scheduler.add_job(fetch_intercom_contacts, 'cron', hour=12, minute=4)
+    scheduler.add_job(update_intercom_contacts, 'cron', hour=12, minute=6)
     #scheduler.add_job(fetch_transactions, 'cron', hour=6, minute=int(OFFSET_BT_SCRIPTS) / 60)  # Assuming OFFSET_BT_SCRIPTS is in seconds
     scheduler.start()
