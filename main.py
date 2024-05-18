@@ -1,6 +1,7 @@
 import time
 import datetime
 import requests
+import numpy as np
 import pandas as pd
 import logging
 import json
@@ -104,12 +105,75 @@ def insert_ga4_into_db(df):
     logging.info("Done!")
   else:
     logging.info("Failed to insert data into the database.")
-    
+
+
+def insert_intercom_contacts_into_db(df):
+    i = 1
+    conn = connect_to_db()  # Replace with your actual connection function
+    if conn is not None:
+        cursor = conn.cursor()
+        insert_query = sql.SQL(
+        """
+        INSERT INTO intercom_contacts (
+            id,
+            email,
+            phone,
+            name,
+            app,
+            created_at,
+            signed_up_at,
+            country,
+            region,
+            city,
+            country_code,
+            shopify_domain,
+            shopify_plan
+        ) VALUES (
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s
+        )
+        """)
+        for index, row in df.iterrows():
+            cursor.execute(insert_query, (
+                row['id'],
+                row['email'],
+                row['phone'],
+                row['name'],
+                row['app'],
+                row['created_at'],
+                row['signed_up_at'],
+                row['country'],
+                row['region'],
+                row['city'],
+                row['country_code'],
+                row['shopify_domain'],
+                row['shopify_plan']
+            ))
+            logging.info(f"{i}/{len(df)}")
+            i += 1
+        conn.commit()
+        cursor.close()
+        conn.close()
+        logging.info("Done!")
+    else:
+        logging.info("Failed to insert data into the database.")
+
 
 def fetch_GA4_sessions():
     #Initialize the DF and the events to be tracked
     df = pd.DataFrame()
-    dates = [(datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")]
+    dates = [(datetime.date.today() - datetime.timedelta(days=2)).strftime("%Y-%m-%d")]
     logging.info(f"Dates considered:{dates}")    
     
     # Initialize OAuth2 credentials
@@ -208,7 +272,7 @@ def fetch_ga4_events():
     #Initialize the DF and the events to be tracked
     df = pd.DataFrame()
     event_types = ["shopify_app_install", "Add App button"]
-    dates = [(datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")]
+    dates = [(datetime.date.today() - datetime.timedelta(days=2)).strftime("%Y-%m-%d")]
     logging.info(f"Dates considered:{dates}")    
     
     # Initialize OAuth2 credentials
@@ -304,19 +368,185 @@ def fetch_ga4_events():
     df = df.join(pd.json_normalize(df_params))
     insert_ga4_into_db(df)
 
+def fetch_intercom_contacts():
+    url = "https://api.intercom.io/contacts/search"
+    created_at_max = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) - 86400 # Intercom only allows to filter by dates, not datetimes
+    created_at_min = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) - 86400 # LOGIC FOR JUST THE DAY BEFORE. For custom timeframes use the 2 lines below
+    # created_at_max = int(datetime.datetime.strptime("2024-05-11 13:59:59", "%Y-%m-%d %H:%M:%S").timestamp()) - 86400 # UTC TIME
+    # created_at_min = int(datetime.datetime.strptime("2024-05-10 14:00:00", "%Y-%m-%d %H:%M:%S").timestamp())        # UTC TIME
+    df_contacts = pd.DataFrame()
+    
+    for app in APPS_CONFIG:
+        headers = {
+            "Content-Type": "application/json",
+            "Intercom-Version": "2.10",
+            "Authorization": app['api_icm_token']
+        }
+        next_page_params = None
+        contacts = []
+        test_contacts = []
+        while True: 
+            payload = {
+                "query": {
+                    "operator": "AND",
+                    "value": [
+                    {
+                        "operator": "OR",
+                        "value": [
+                        {
+                        "field": "created_at",
+                        "operator": ">",
+                        "value": created_at_min # Unix Timestamp for initial date
+                        },
+                        {
+                        "field": "created_at",
+                        "operator": "=",
+                        "value": created_at_min # Unix Timestamp for final date
+                        }
+                    ]
+                    },
+                    {
+                        "operator": "OR",
+                        "value": [
+                        {
+                        "field": "created_at",
+                        "operator": "<",
+                        "value": created_at_max # Unix Timestamp for initial date
+                        },
+                        {
+                        "field": "created_at",
+                        "operator": "=",
+                        "value": created_at_max # Unix Timestamp for final date
+                        }
+                    ]
+                    }
+                    ]
+                },
+                "pagination": {
+                    "per_page": 150,
+                    "starting_after": next_page_params
+                }
+                }  
+            
+            response = requests.post(url, json=payload, headers=headers)
+            #time.sleep(0.1)
+            if response.status_code != 200:
+                logging.error(f"Error: {response.status_code}")
+                continue
+
+            data_temp = response.json()
+            next_page_params = data_temp.get('pages',{}).get('next',{}).get('starting_after')
+            contacts.extend(data_temp.get('data',{}))
+            logging.info(f"Contacts fetched: {len(contacts)}")
+            if not next_page_params:
+                break  # Exit the loop if there are no more pages.
+        
+        # 1-app type df
+        if app['app_name'] == "ICU" or app['app_name'] == "TFX" or app['app_name'] == "PC":
+            for contact in contacts:
+                # General Attributes
+                id = contact.get('id')
+                email = contact.get('email')
+                phone = contact.get('phone')
+                name = contact.get('name')
+                created_at = contact.get('created_at')
+                signed_up_at = contact.get('signed_up_at')
+                country = contact.get('location',{}).get('country')
+                region = contact.get('location',{}).get('region')
+                city = contact.get('location',{}).get('city')
+                country_code = contact.get('location',{}).get('country_code')
+                # Custom Attributes
+                app_name = app["app_name"]
+                if app["app_name"] == 'ICU':
+                    shopify_domain = contact.get('custom_attributes',{}).get('shop_url')
+                    shopify_plan = contact.get('custom_attributes',{}).get('shopify_plan')
+                elif app["app_name"] == 'TFX':
+                    shopify_domain = contact.get('custom_attributes',{}).get('shopify_url')
+                    shopify_plan = contact.get('custom_attributes',{}).get('plan_display_name')
+                else: #PC
+                    shopify_domain = contact.get('custom_attributes',{}).get('shop_url')
+                    shopify_plan = contact.get('custom_attributes',{}).get('shopify_plan')
+            
+                test_contacts.append({
+                    "id": id,
+                    "email": email,
+                    "phone": phone,
+                    "name": name,
+                    "app": app_name,
+                    "created_at": created_at,
+                    "signed_up_at": signed_up_at,
+                    "country": country,
+                    "region": region,
+                    "city": city,
+                    "country_code": country_code,
+                    "shopify_domain": shopify_domain,
+                    "shopify_plan": shopify_plan
+                })
+            df_temp = pd.DataFrame(test_contacts)
+        
+        # 2-app type df
+        if app['app_name'] == "COD":
+            for contact in contacts:
+                # General Attributes
+                id = contact.get('id')
+                email = contact.get('email')
+                phone = contact.get('phone')
+                name = contact.get('name')
+                created_at = contact.get('created_at')
+                signed_up_at = contact.get('signed_up_at')
+                country = contact.get('location',{}).get('country')
+                region = contact.get('location',{}).get('region')
+                city = contact.get('location',{}).get('city')
+                country_code = contact.get('location',{}).get('country_code')
+                # Custom Attributes
+                app_raw = contact.get('custom_attributes',{}).get('App name')
+                app_name = "SATC" if app_raw == 'Sticky' else "SR"
+                shopify_domain = contact.get('custom_attributes',{}).get('Shop name')
+                shopify_plan = contact.get('custom_attributes',{}).get('Plan display name')
+                test_contacts.append({
+                    "id": id,
+                    "email": email,
+                    "phone": phone,
+                    "name": name,
+                    "app": app_name,
+                    "created_at": created_at,
+                    "signed_up_at": signed_up_at,
+                    "country": country,
+                    "region": region,
+                    "city": city,
+                    "country_code": country_code,
+                    "shopify_domain": shopify_domain,
+                    "shopify_plan": shopify_plan
+                })
+            df_temp = pd.DataFrame(test_contacts)
+
+        #Appends the temporary dataframe to the main one
+        df_contacts = pd.concat([df_contacts, df_temp], ignore_index=True)
+        logging.info(f"Partner {app['app_name']} processed. Total {len(contacts)} contacts")
+    
+    logging.info(f"Done! Total contacts: {len(df_contacts)}")
+    # Update these columns to datetime instead of Unix timestamps, replaces NaN and NaT with None
+    df_contacts = df_contacts.replace({np.nan: None})
+    df_contacts['created_at'] = pd.to_datetime(df_contacts['created_at'], unit='s',utc=True)
+    #df_contacts['created_at'] = df_contacts['created_at'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')
+    df_contacts['signed_up_at'] = pd.to_datetime(df_contacts['signed_up_at'], unit='s',utc=True)
+    #df_contacts['signed_up_at'] = df_contacts['updated_at'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')
+    df_contacts = df_contacts.replace({pd.NaT: None})
+    insert_intercom_contacts_into_db(df_contacts)
+
 
 if __name__ == "__main__":
     logging.info("Starting main execution.")
     scheduler = BlockingScheduler()
 
     # Immediate execution upon deployment
-
-    
+    fetch_intercom_contacts()
     #time.sleep(int(OFFSET_BT_SCRIPTS))
     #fetch_transactions()
 
     # Schedule the tasks to run daily at 7:00 AM
-    scheduler.add_job(fetch_GA4_sessions, 'cron', hour=7, minute=0)
-    scheduler.add_job(fetch_ga4_events, 'cron', hour=7, minute=0)
+    scheduler.add_job(fetch_GA4_sessions, 'cron', hour=12, minute=0)
+    scheduler.add_job(fetch_ga4_events, 'cron', hour=12, minute=2)
+    scheduler.add_job(fetch_ga4_events, 'cron', hour=12, minute=4)
     #scheduler.add_job(fetch_transactions, 'cron', hour=6, minute=int(OFFSET_BT_SCRIPTS) / 60)  # Assuming OFFSET_BT_SCRIPTS is in seconds
     scheduler.start()
