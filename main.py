@@ -8,6 +8,7 @@ import json
 import psycopg2
 from psycopg2 import sql
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 from config import APPS_CONFIG, DB_CREDENTIALS, UPDATE_INTERVAL, TIME_DELAY, OFFSET_BT_SCRIPTS
 from config import GA4_OAUTH
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -29,22 +30,27 @@ def connect_to_db():
 
 
 def connect_to_db_sqlalchemy(): 
-    try:
-        # Construct the connection string
-        user = DB_CREDENTIALS['user']
-        password = DB_CREDENTIALS['password']
-        host = DB_CREDENTIALS['host']
-        dbname = DB_CREDENTIALS['database']
-        port = DB_CREDENTIALS['port']
-        sslmode = DB_CREDENTIALS['sslmode']
-        connection_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
-        # Create and return the engine
-        engine = create_engine(connection_string)
-        return engine
-    except Exception as e:
-        print(f"Failed to create engine: {e}")
-        raise  # Raise an exception to be handled where connect_to_db is called
+    user = DB_CREDENTIALS['user']
+    password = DB_CREDENTIALS['password']
+    host = DB_CREDENTIALS['host']
+    dbname = DB_CREDENTIALS['database']
+    port = DB_CREDENTIALS['port']
+    sslmode = DB_CREDENTIALS['sslmode']
+    connection_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
 
+    engine = create_engine(connection_string)
+    connection = None
+
+    while connection is None:
+        try:
+            connection = engine.connect()
+            logging.info("Successfully connected to the database.")
+        except OperationalError as e:
+            logging.error(f"Connection failed: {e}")
+            logging.info("Retrying in 1 minute...")
+            time.sleep(60)
+    
+    return engine
 
 # Function to parse URL and extract query parameters
 def extract_query_params(url):
@@ -720,7 +726,7 @@ if __name__ == "__main__":
     scheduler = BlockingScheduler()
 
     # Immediate execution upon deployment
-    
+    update_intercom_contacts()
     #time.sleep(int(OFFSET_BT_SCRIPTS))
 
     # Schedule the tasks to run daily at 12:00 PM UTC TIME
