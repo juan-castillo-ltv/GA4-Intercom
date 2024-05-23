@@ -199,7 +199,7 @@ def insert_intercom_contacts_into_db(df):
 def fetch_GA4_sessions():
     #Initialize the DF and the events to be tracked
     df = pd.DataFrame()
-    dates = [(datetime.date.today() - datetime.timedelta(days=2)).strftime("%Y-%m-%d")]
+    dates = [(datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")]
     logging.info(f"Dates considered:{dates}")    
     
     # Initialize OAuth2 credentials
@@ -298,7 +298,7 @@ def fetch_ga4_events():
     #Initialize the DF and the events to be tracked
     df = pd.DataFrame()
     event_types = ["shopify_app_install", "Add App button"]
-    dates = [(datetime.date.today() - datetime.timedelta(days=2)).strftime("%Y-%m-%d")]
+    dates = [(datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")]
     logging.info(f"Dates considered:{dates}")    
     
     # Initialize OAuth2 credentials
@@ -730,9 +730,9 @@ if __name__ == "__main__":
     #time.sleep(int(OFFSET_BT_SCRIPTS))
 
     # Schedule the tasks to run daily at 12:00 PM UTC TIME
-    scheduler.add_job(fetch_GA4_sessions, 'cron', hour=12, minute=0)
-    scheduler.add_job(fetch_ga4_events, 'cron', hour=12, minute=2)
-    scheduler.add_job(fetch_intercom_contacts, 'cron', hour=12, minute=4)
-    scheduler.add_job(update_intercom_contacts, 'cron', hour=12, minute=6)
+    scheduler.add_job(fetch_GA4_sessions, 'cron', hour=12, minute=20)
+    scheduler.add_job(fetch_ga4_events, 'cron', hour=12, minute=22)
+    scheduler.add_job(fetch_intercom_contacts, 'cron', hour=12, minute=0)
+    scheduler.add_job(update_intercom_contacts, 'cron', hour=12, minute=24)
     #scheduler.add_job(fetch_transactions, 'cron', hour=6, minute=int(OFFSET_BT_SCRIPTS) / 60)  # Assuming OFFSET_BT_SCRIPTS is in seconds
     scheduler.start()
