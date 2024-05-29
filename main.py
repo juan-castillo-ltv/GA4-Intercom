@@ -28,6 +28,110 @@ def connect_to_db():
         logging.error(f"Failed to connect to the database: {str(e)}")
         return None
 
+def update_coupons_data():
+    conn = connect_to_db()  # Replace with your actual connection function
+    if conn is not None:
+        cursor = conn.cursor()   
+
+    url = "https://api.intercom.io/contacts/search"
+    base_url = "https://api.intercom.io/contacts"
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s]: %(message)s', handlers=[logging.StreamHandler()])
+    created_at_max = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) - 86400 # Intercom only allows to filter by dates, not datetimes
+    created_at_min = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) - 86400 # LOGIC FOR JUST THE DAY BEFORE. For custom timeframes use the 2 lines below
+    # created_at_max = int(datetime.datetime.strptime("2024-05-11 13:59:59", "%Y-%m-%d %H:%M:%S").timestamp()) - 86400 # UTC TIME
+    # created_at_min = int(datetime.datetime.strptime("2024-05-10 14:00:00", "%Y-%m-%d %H:%M:%S").timestamp())        # UTC TIME
+
+    for app in APPS_CONFIG:
+        if app["app_name"] != 'SR': # SR and SATC repeat the same data, so only need to update once
+            headers = {
+                "Content-Type": "application/json",
+                "Intercom-Version": "2.10",
+                "Authorization": app['api_icm_token']
+                }
+            next_page_params = None
+            contacts = []
+            test_contacts = []
+
+            while True: 
+                payload = {
+                    "query": {
+                    "operator": "AND",
+                    "value": [
+                        {
+                            "operator": "OR",
+                            "value": [
+                        {
+                            "field": "custom_attributes.coupon_redeemed_at",
+                            "operator": ">",
+                            "value": created_at_min # Unix Timestamp for initial date
+                        },
+                        {
+                            "field": "custom_attributes.coupon_redeemed_at",
+                            "operator": "=",
+                            "value": created_at_min # Unix Timestamp for final date
+                        }
+                        ]
+                        },
+                        {
+                            "operator": "OR",
+                            "value": [
+                        {
+                            "field": "custom_attributes.coupon_redeemed_at",
+                            "operator": "<",
+                            "value": created_at_max # Unix Timestamp for initial date
+                        },
+                        {
+                            "field": "custom_attributes.coupon_redeemed_at",
+                            "operator": "=",
+                            "value": created_at_max # Unix Timestamp for final date
+                        }
+                        ]
+                        }
+                    ]
+                    },
+                    "pagination": {
+                    "per_page": 150,
+                    "starting_after": next_page_params
+                    }
+                }  
+                
+                response = requests.post(url, json=payload, headers=headers)
+                #time.sleep(0.1)
+                if response.status_code != 200:
+                    logging.error(f"Error: {response.status_code}")
+                    continue
+
+                data_temp = response.json()
+                next_page_params = data_temp.get('pages',{}).get('next',{}).get('starting_after')
+                contacts.extend(data_temp.get('data',{}))
+                logging.info(f"{app['app_name']} Contacts fetched: {len(contacts)}") if app['app_name'] not in ['SR', 'SATC'] else logging.info(f"COD Contacts fetched: {len(test_contacts)}")
+                if not next_page_params:
+                    break  # Exit the loop if there are no more pages.
+                
+            for contact in contacts:
+                current_id = contact.get('id')
+                current_email = contact.get('email')
+                current_coupon = contact.get('custom_attributes',{}).get('coupon_redeemed')
+                current_coupon_timestamp = contact.get('custom_attributes',{}).get('coupon_redeemed_at')
+                current_coupon_dt = datetime.datetime.fromtimestamp(current_coupon_timestamp).strftime("%Y-%m-%d %H:%M:%S") # Assure this is taken in UTC timezone
+                if conn is not None:
+                    insert_query = sql.SQL(
+                    f'''
+                        UPDATE intercom_contacts
+                        SET
+                        coupon_redeemed = {current_coupon},
+                        coupon_redeemed_at = {current_coupon_dt}
+                        WHERE id = {current_id} AND app = {app['app_name']};
+                    '''
+                    )
+                    logging.info(f"Updated ID: {current_id} with email: {current_email} and coupon: {current_coupon} at: {current_coupon_dt}")
+                else:
+                    logging.error("Failed to insert data into the database.")
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    
 
 def connect_to_db_sqlalchemy(): 
     user = DB_CREDENTIALS['user']
@@ -726,13 +830,14 @@ if __name__ == "__main__":
     scheduler = BlockingScheduler()
 
     # Immediate execution upon deployment
-    
+    update_coupons_data()
     #time.sleep(int(OFFSET_BT_SCRIPTS))
 
     # Schedule the tasks to run daily at 12:00 PM UTC TIME
     scheduler.add_job(fetch_GA4_sessions, 'cron', hour=12, minute=20)
     scheduler.add_job(fetch_ga4_events, 'cron', hour=12, minute=22)
     scheduler.add_job(fetch_intercom_contacts, 'cron', hour=12, minute=0)
+    scheduler.add_job(update_coupons_data, 'cron', hour=12, minute=2)
     scheduler.add_job(update_intercom_contacts, 'cron', hour=12, minute=24)
     #scheduler.add_job(fetch_transactions, 'cron', hour=6, minute=int(OFFSET_BT_SCRIPTS) / 60)  # Assuming OFFSET_BT_SCRIPTS is in seconds
     scheduler.start()
