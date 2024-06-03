@@ -834,10 +834,10 @@ if __name__ == "__main__":
     #time.sleep(int(OFFSET_BT_SCRIPTS))
 
     # Schedule the tasks to run daily at 12:00 PM UTC TIME
-    scheduler.add_job(fetch_GA4_sessions, 'cron', hour=12, minute=20)
-    scheduler.add_job(fetch_ga4_events, 'cron', hour=12, minute=22)
-    scheduler.add_job(fetch_intercom_contacts, 'cron', hour=12, minute=0)
-    scheduler.add_job(update_coupons_data, 'cron', hour=12, minute=2)
-    scheduler.add_job(update_intercom_contacts, 'cron', hour=12, minute=24)
+    scheduler.add_job(fetch_GA4_sessions, 'cron', hour=11, minute=20)
+    scheduler.add_job(fetch_ga4_events, 'cron', hour=11, minute=22)
+    scheduler.add_job(fetch_intercom_contacts, 'cron', hour=11, minute=0)
+    scheduler.add_job(update_coupons_data, 'cron', hour=11, minute=2)
+    scheduler.add_job(update_intercom_contacts, 'cron', hour=11, minute=24)
     #scheduler.add_job(fetch_transactions, 'cron', hour=6, minute=int(OFFSET_BT_SCRIPTS) / 60)  # Assuming OFFSET_BT_SCRIPTS is in seconds
     scheduler.start()
