@@ -114,16 +114,19 @@ def update_coupons_data():
                 current_coupon = contact.get('custom_attributes',{}).get('coupon_redeemed')
                 current_coupon_timestamp = contact.get('custom_attributes',{}).get('coupon_redeemed_at')
                 current_coupon_dt = datetime.datetime.fromtimestamp(current_coupon_timestamp).strftime("%Y-%m-%d %H:%M:%S") # Assure this is taken in UTC timezone
+                current_coupon_value = contact.get('custom_attributes',{}).get('coupon_value')
                 if conn is not None:
                     insert_query = sql.SQL(
-                    f'''
+                        '''
                         UPDATE intercom_contacts
                         SET
-                        coupon_redeemed = {current_coupon},
-                        coupon_redeemed_at = {current_coupon_dt}
-                        WHERE id = {current_id} AND app = {app['app_name']};
-                    '''
+                        coupon_redeemed = %s,
+                        coupon_redeemed_at = %s,
+                        coupon_value = %s
+                        WHERE id = %s AND app = %s;
+                        '''
                     )
+                    cursor.execute(insert_query, (current_coupon, current_coupon_dt, current_coupon_value, current_id, app['app_name']))
                     logging.info(f"Updated ID: {current_id} with email: {current_email} and coupon: {current_coupon} at: {current_coupon_dt}")
                 else:
                     logging.error("Failed to insert data into the database.")
@@ -257,8 +260,14 @@ def insert_intercom_contacts_into_db(df):
             city,
             country_code,
             shopify_domain,
-            shopify_plan
+            shopify_plan,
+            coupon_redeemed,
+            coupon_redeemed_at,
+            coupon_value
         ) VALUES (
+            %s,
+            %s,
+            %s,
             %s,
             %s,
             %s,
@@ -288,7 +297,10 @@ def insert_intercom_contacts_into_db(df):
                 row['city'],
                 row['country_code'],
                 row['shopify_domain'],
-                row['shopify_plan']
+                row['shopify_plan'],
+                row['coupon_redeemed'],
+                row['coupon_redeemed_at'],
+                row['coupon_value']
             ))
             logging.info(f"{i}/{len(df)}")
             i += 1
@@ -590,12 +602,21 @@ def fetch_intercom_contacts():
                 if app["app_name"] == 'ICU':
                     shopify_domain = contact.get('custom_attributes',{}).get('shop_url')
                     shopify_plan = contact.get('custom_attributes',{}).get('shopify_plan')
+                    coupon_redeemed = contact.get('custom_attributes',{}).get('coupon_redeemed')
+                    coupon_redeemed_at = contact.get('custom_attributes',{}).get('coupon_redeemed_at')
+                    coupon_value = contact.get('custom_attributes',{}).get('coupon_value')
                 elif app["app_name"] == 'TFX':
                     shopify_domain = contact.get('custom_attributes',{}).get('shopify_url')
                     shopify_plan = contact.get('custom_attributes',{}).get('plan_display_name')
+                    coupon_redeemed = contact.get('custom_attributes',{}).get('coupon_redeemed')
+                    coupon_redeemed_at = contact.get('custom_attributes',{}).get('coupon_redeemed_at')
+                    coupon_value = contact.get('custom_attributes',{}).get('coupon_value')
                 else: #PC
                     shopify_domain = contact.get('custom_attributes',{}).get('shop_url')
                     shopify_plan = contact.get('custom_attributes',{}).get('shopify_plan')
+                    coupon_redeemed = contact.get('custom_attributes',{}).get('coupon_redeemed')
+                    coupon_redeemed_at = contact.get('custom_attributes',{}).get('coupon_redeemed_at')
+                    coupon_value = contact.get('custom_attributes',{}).get('coupon_value')
             
                 test_contacts.append({
                     "id": id,
@@ -610,7 +631,10 @@ def fetch_intercom_contacts():
                     "city": city,
                     "country_code": country_code,
                     "shopify_domain": shopify_domain,
-                    "shopify_plan": shopify_plan
+                    "shopify_plan": shopify_plan,
+                    "coupon_redeemed": coupon_redeemed,
+                    "coupon_redeemed_at": coupon_redeemed_at,
+                    "coupon_value": coupon_value
                 })
             df_temp = pd.DataFrame(test_contacts)
         
@@ -633,6 +657,9 @@ def fetch_intercom_contacts():
                 app_name = "SATC" if app_raw == 'Sticky' else "SR"
                 shopify_domain = contact.get('custom_attributes',{}).get('Shop name')
                 shopify_plan = contact.get('custom_attributes',{}).get('Plan display name')
+                coupon_redeemed = contact.get('custom_attributes',{}).get('coupon_redeemed')
+                coupon_redeemed_at = contact.get('custom_attributes',{}).get('coupon_redeemed_at')
+                coupon_value = contact.get('custom_attributes',{}).get('coupon_value')
                 test_contacts.append({
                     "id": id,
                     "email": email,
@@ -646,7 +673,10 @@ def fetch_intercom_contacts():
                     "city": city,
                     "country_code": country_code,
                     "shopify_domain": shopify_domain,
-                    "shopify_plan": shopify_plan
+                    "shopify_plan": shopify_plan,
+                    "coupon_redeemed": coupon_redeemed,
+                    "coupon_redeemed_at": coupon_redeemed_at,
+                    "coupon_value": coupon_value
                 })
             df_temp = pd.DataFrame(test_contacts)
 
