@@ -695,6 +695,8 @@ def fetch_intercom_contacts():
     #df_contacts['created_at'] = df_contacts['created_at'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')
     df_contacts['signed_up_at'] = pd.to_datetime(df_contacts['signed_up_at'], unit='s',utc=True)
     #df_contacts['signed_up_at'] = df_contacts['updated_at'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')
+    df_contacts['coupon_redeemed_at'] = pd.to_datetime(df_contacts['coupon_redeemed_at'], unit='s',utc=True)
+    #df_contacts['signed_up_at'] = df_contacts['updated_at'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')
     df_contacts = df_contacts.replace({pd.NaT: None})
     insert_intercom_contacts_into_db(df_contacts)
 
