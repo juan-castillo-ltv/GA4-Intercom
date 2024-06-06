@@ -53,47 +53,90 @@ def update_coupons_data():
             test_contacts = []
 
             while True: 
-                payload = {
-                    "query": {
-                    "operator": "AND",
-                    "value": [
-                        {
-                            "operator": "OR",
-                            "value": [
-                        {
-                            "field": "custom_attributes.coupon_redeemed_at",
-                            "operator": ">",
-                            "value": created_at_min # Unix Timestamp for initial date
-                        },
-                        {
-                            "field": "custom_attributes.coupon_redeemed_at",
-                            "operator": "=",
-                            "value": created_at_min # Unix Timestamp for final date
-                        }
+                if app['app_name'] in ['PC', 'ICU', 'TFX']:
+                    payload = {
+                        "query": {
+                        "operator": "AND",
+                        "value": [
+                            {
+                                "operator": "OR",
+                                "value": [
+                            {
+                                "field": "custom_attributes.coupon_redeemed_at",
+                                "operator": ">",
+                                "value": created_at_min # Unix Timestamp for initial date
+                            },
+                            {
+                                "field": "custom_attributes.coupon_redeemed_at",
+                                "operator": "=",
+                                "value": created_at_min # Unix Timestamp for final date
+                            }
+                            ]
+                            },
+                            {
+                                "operator": "OR",
+                                "value": [
+                            {
+                                "field": "custom_attributes.coupon_redeemed_at",
+                                "operator": "<",
+                                "value": created_at_max # Unix Timestamp for initial date
+                            },
+                            {
+                                "field": "custom_attributes.coupon_redeemed_at",
+                                "operator": "=",
+                                "value": created_at_max # Unix Timestamp for final date
+                            }
+                            ]
+                            }
                         ]
                         },
-                        {
-                            "operator": "OR",
-                            "value": [
-                        {
-                            "field": "custom_attributes.coupon_redeemed_at",
-                            "operator": "<",
-                            "value": created_at_max # Unix Timestamp for initial date
-                        },
-                        {
-                            "field": "custom_attributes.coupon_redeemed_at",
-                            "operator": "=",
-                            "value": created_at_max # Unix Timestamp for final date
+                        "pagination": {
+                        "per_page": 150,
+                        "starting_after": next_page_params
                         }
+                    } 
+                else:
+                        payload = {
+                        "query": {
+                        "operator": "AND",
+                        "value": [
+                            {
+                                "operator": "OR",
+                                "value": [
+                            {
+                                "field": "custom_attributes.coupon_redeem_at",
+                                "operator": ">",
+                                "value": created_at_min # Unix Timestamp for initial date
+                            },
+                            {
+                                "field": "custom_attributes.coupon_redeem_at",
+                                "operator": "=",
+                                "value": created_at_min # Unix Timestamp for final date
+                            }
+                            ]
+                            },
+                            {
+                                "operator": "OR",
+                                "value": [
+                            {
+                                "field": "custom_attributes.coupon_redeem_at",
+                                "operator": "<",
+                                "value": created_at_max # Unix Timestamp for initial date
+                            },
+                            {
+                                "field": "custom_attributes.coupon_redeem_at",
+                                "operator": "=",
+                                "value": created_at_max # Unix Timestamp for final date
+                            }
+                            ]
+                            }
                         ]
+                        },
+                        "pagination": {
+                        "per_page": 150,
+                        "starting_after": next_page_params
                         }
-                    ]
-                    },
-                    "pagination": {
-                    "per_page": 150,
-                    "starting_after": next_page_params
-                    }
-                }  
+                    }  
                 
                 response = requests.post(url, json=payload, headers=headers)
                 #time.sleep(0.1)
@@ -111,8 +154,8 @@ def update_coupons_data():
             for contact in contacts:
                 current_id = contact.get('id')
                 current_email = contact.get('email')
-                current_coupon = contact.get('custom_attributes',{}).get('coupon_redeemed')
-                current_coupon_timestamp = contact.get('custom_attributes',{}).get('coupon_redeemed_at')
+                current_coupon = contact.get('custom_attributes',{}).get('coupon_redeemed') if app['app_name'] in ['PC', 'ICU', 'TFX'] else contact.get('custom_attributes',{}).get('coupon_redeem')
+                current_coupon_timestamp = contact.get('custom_attributes',{}).get('coupon_redeemed_at') if app['app_name'] in ['PC', 'ICU', 'TFX'] else contact.get('custom_attributes',{}).get('coupon_redeem_at')
                 current_coupon_dt = datetime.datetime.fromtimestamp(current_coupon_timestamp).strftime("%Y-%m-%d %H:%M:%S") # Assure this is taken in UTC timezone
                 current_coupon_value = contact.get('custom_attributes',{}).get('coupon_value')
                 if conn is not None:
@@ -657,8 +700,8 @@ def fetch_intercom_contacts():
                 app_name = "SATC" if app_raw == 'Sticky' else "SR"
                 shopify_domain = contact.get('custom_attributes',{}).get('Shop name')
                 shopify_plan = contact.get('custom_attributes',{}).get('Plan display name')
-                coupon_redeemed = contact.get('custom_attributes',{}).get('coupon_redeemed')
-                coupon_redeemed_at = contact.get('custom_attributes',{}).get('coupon_redeemed_at')
+                coupon_redeemed = contact.get('custom_attributes',{}).get('coupon_redeem')
+                coupon_redeemed_at = contact.get('custom_attributes',{}).get('coupon_redeem_at')
                 coupon_value = contact.get('custom_attributes',{}).get('coupon_value')
                 test_contacts.append({
                     "id": id,
