@@ -17,3 +17,4 @@ requests>=2.28.2
 SQLAlchemy>=2.0.30
 urllib3>=1.26.14
 python-dotenv>=1.0.0
+google-ads>=24.1.0

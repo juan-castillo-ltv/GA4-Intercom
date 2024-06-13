@@ -13,49 +13,63 @@ GA4_OAUTH = os.getenv("GA4_OAUTH")
 # Configurations for multiple apps
 APPS_CONFIG = [
     {
-        "app_name": os.getenv("APP1_Name"),
-        "api_ga4_url": os.getenv("APP1_API_GA4_URL"),
-        "api_ga4_code": os.getenv("APP1_API_GA4_CODE"),
-        "api_icm_token": os.getenv("APP1_API_ICM_TOKEN"),
-        "api_icm_id": os.getenv("APP1_API_ICM_ID")
+      "app_name": os.getenv("APP1_Name"),
+      "api_ga4_url": os.getenv("APP1_API_GA4_URL"),
+      "api_ga4_code": os.getenv("APP1_API_GA4_CODE"),
+      "api_icm_token": os.getenv("APP1_API_ICM_TOKEN"),
+      "api_icm_id": os.getenv("APP1_API_ICM_ID"),
+      "app_google_ads_id": os.getenv("PC_GOOGLE_ADS_ID"),
+      "app_user_list": os.getenv("PC_USER_LIST")
     },
     {
-       "app_name": os.getenv("APP2_Name"),
-       "api_ga4_url": os.getenv("APP2_API_GA4_URL"),
-       "api_ga4_code": os.getenv("APP2_API_GA4_CODE"),
-       "api_icm_token": os.getenv("APP2_API_ICM_TOKEN"),
-       "api_icm_id": os.getenv("APP2_API_ICM_ID")
+      "app_name": os.getenv("APP2_Name"),
+      "api_ga4_url": os.getenv("APP2_API_GA4_URL"),
+      "api_ga4_code": os.getenv("APP2_API_GA4_CODE"),
+      "api_icm_token": os.getenv("APP2_API_ICM_TOKEN"),
+      "api_icm_id": os.getenv("APP2_API_ICM_ID"),
+      "app_google_ads_id": os.getenv("ICU_GOOGLE_ADS_ID"),
+      "app_user_list": os.getenv("ICU_USER_LIST")
     },
     {
-       "app_name": os.getenv("APP3_Name"),
-       "api_ga4_url": os.getenv("APP3_API_GA4_URL"),
-       "api_ga4_code": os.getenv("APP3_API_GA4_CODE"),
-       "api_icm_token": os.getenv("APP3_API_ICM_TOKEN"),
-       "api_icm_id": os.getenv("APP3_API_ICM_ID")
+      "app_name": os.getenv("APP3_Name"),
+      "api_ga4_url": os.getenv("APP3_API_GA4_URL"),
+      "api_ga4_code": os.getenv("APP3_API_GA4_CODE"),
+      "api_icm_token": os.getenv("APP3_API_ICM_TOKEN"),
+      "api_icm_id": os.getenv("APP3_API_ICM_ID"),
+      "app_google_ads_id": os.getenv("TFX_GOOGLE_ADS_ID"),
+      "app_user_list": os.getenv("TFX_USER_LIST")
     },
     {
-       "app_name": os.getenv("APP4_Name"),
-       "api_ga4_url": os.getenv("APP4_API_GA4_URL"),
-       "api_ga4_code": os.getenv("APP4_API_GA4_CODE"),
-       "api_icm_token": os.getenv("APP4_API_ICM_TOKEN"),
-       "api_icm_id": os.getenv("APP4_API_ICM_ID")
+      "app_name": os.getenv("APP4_Name"),
+      "api_ga4_url": os.getenv("APP4_API_GA4_URL"),
+      "api_ga4_code": os.getenv("APP4_API_GA4_CODE"),
+      "api_icm_token": os.getenv("APP4_API_ICM_TOKEN"),
+      "api_icm_id": os.getenv("APP4_API_ICM_ID"),
+      "app_google_ads_id": os.getenv("COD_GOOGLE_ADS_ID"),
+      "app_user_list": os.getenv("COD_USER_LIST")
     },
     {
-       "app_name": os.getenv("APP5_Name"),
-       "api_ga4_url": os.getenv("APP5_API_GA4_URL"),
-       "api_ga4_code": os.getenv("APP5_API_GA4_CODE"),
-       "api_icm_token": os.getenv("APP5_API_ICM_TOKEN"),
-       "api_icm_id": os.getenv("APP5_API_ICM_ID")
+      "app_name": os.getenv("APP5_Name"),
+      "api_ga4_url": os.getenv("APP5_API_GA4_URL"),
+      "api_ga4_code": os.getenv("APP5_API_GA4_CODE"),
+      "api_icm_token": os.getenv("APP5_API_ICM_TOKEN"),
+      "api_icm_id": os.getenv("APP5_API_ICM_ID"),
+      "app_google_ads_id": os.getenv("COD_GOOGLE_ADS_ID"),
+      "app_user_list": os.getenv("COD_USER_LIST")
     },
 ]
 
 # Database configurations remain the same
 DB_CREDENTIALS = {
-    "user": os.getenv("DB_USERNAME"),
-    "password": os.getenv("DB_PASSWORD"),
-    "host": os.getenv("DB_HOST"),
-    "port": os.getenv("DB_PORT"),
-    "database": os.getenv("DB_DATABASE"),
-    "sslmode": os.getenv("DB_SSLMODE")
+   "user": os.getenv("DB_USERNAME"),
+   "password": os.getenv("DB_PASSWORD"),
+   "host": os.getenv("DB_HOST"),
+   "port": os.getenv("DB_PORT"),
+   "database": os.getenv("DB_DATABASE"),
+   "sslmode": os.getenv("DB_SSLMODE")
 }
+
+LTV_SAAS_GOOGLE_ADS_ID = os.getenv("LTV_SAAS_GOOGLE_ADS_ID")
+
+GOOGLE_ADS_CONFIG = os.getenv("GOOGLE_ADS_CONFIG")
 
