@@ -297,7 +297,7 @@ def add_emails_to_google_and_meta_ads():
             try:
                 # Replace with your actual customer ID and user list ID 
                 customer_id = app['app_google_ads_id'] # Google Ads Account ID
-                user_list_id = app['app_google_ads_id']
+                user_list_id = app['app_user_list']
                 email_addresses = emails_list
                 success, failed_emails = add_emails_to_customer_list(googleads_client, customer_id, user_list_id, email_addresses)
                 
