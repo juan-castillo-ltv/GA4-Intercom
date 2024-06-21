@@ -56,6 +56,28 @@ def meta_test_credentials():
         logging.info(f"Error: {response.json()}")
         return False
 
+# Function to add users to the custom audience in batches of 10
+def meta_add_users_to_custom_audience(user_emails):
+    url = f"https://graph.facebook.com/v12.0/{TFX_META_CUSTOM_AUDIENCE_ID}/users"
+
+    for i in range(0, len(user_emails), 10):
+        batch_emails = user_emails[i:i + 10]
+        hashed_emails = [hashlib.sha256(email.encode('utf-8')).hexdigest() for email in batch_emails]
+        
+        payload = {
+            'payload': json.dumps({
+                'schema': 'EMAIL_SHA256',
+                'data': hashed_emails
+            }),
+            'access_token': TFX_META_LONG_LIVED_TOKEN
+        }
+        response = requests.post(url, data=payload)
+        logging.info(f"Batch {i // 10 + 1} Add Response: {response.json()}")
+        if response.json().get('num_received') >= 1 and response.json().get('num_invalid_entries') == 0:
+            logging.info(f"The email batch was successfully added to the TFX Active Users List")
+        else:
+            logging.info("The email insertion was not successful.")
+
 def meta_remove_users_from_custom_audience(user_emails):
     url = f"https://graph.facebook.com/v12.0/{TFX_META_CUSTOM_AUDIENCE_ID}/users"
 
@@ -294,6 +316,12 @@ def add_emails_to_google_and_meta_ads():
             emails_list = [contact['email'] for contact in contacts]
             logging.info(emails_list)
             
+            # Add emails from Meta Ads custom audience
+            if app['app_name'] == 'TFX':
+                if meta_test_credentials():
+                    meta_add_users_to_custom_audience(emails_list)
+
+            # Add emails from Google Ads user list           
             try:
                 # Replace with your actual customer ID and user list ID 
                 customer_id = app['app_google_ads_id'] # Google Ads Account ID
