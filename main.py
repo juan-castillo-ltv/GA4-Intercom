@@ -10,6 +10,7 @@ from psycopg2 import sql
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from config import APPS_CONFIG, DB_CREDENTIALS, UPDATE_INTERVAL, TIME_DELAY, OFFSET_BT_SCRIPTS, LTV_SAAS_GOOGLE_ADS_ID, GOOGLE_ADS_CONFIG
+from config import TFX_META_APP_ID, TFX_META_APP_SECRET, TFX_META_LONG_LIVED_TOKEN, TFX_META_AD_ACCOUNT_ID, TFX_META_CUSTOM_AUDIENCE_ID
 from config import GA4_OAUTH
 import yaml
 import hashlib
@@ -34,6 +35,49 @@ def connect_to_db():
         logging.error(f"Failed to connect to the database: {str(e)}")
         return None
 
+############ REMOVE FROM META ADS LISTS ############
+def meta_test_credentials():
+    url = f"https://graph.facebook.com/v12.0/act_{TFX_META_AD_ACCOUNT_ID}"
+    params = {
+        'access_token': TFX_META_LONG_LIVED_TOKEN,
+        'fields': 'name,account_status'
+    }
+    response = requests.get(url, params=params)
+    
+    if response.status_code == 200:
+        data = response.json()
+        logging.info(f"Ad Account Name: {data['name']}")
+        logging.info(f"Account Status: {data['account_status']}")
+        logging.info("Your tokens and credentials are working correctly.")
+        return True
+    else:
+        logging.info("Failed to fetch ad account information.")
+        logging.info(f"Status Code: {response.status_code}")
+        logging.info(f"Error: {response.json()}")
+        return False
+
+def meta_remove_users_from_custom_audience(user_emails):
+    url = f"https://graph.facebook.com/v12.0/{TFX_META_CUSTOM_AUDIENCE_ID}/users"
+
+    for i in range(0, len(user_emails), MAX_OPERATIONS_PER_REQUEST):
+        batch_emails = user_emails[i:i + MAX_OPERATIONS_PER_REQUEST]
+        hashed_emails = [hashlib.sha256(email.encode('utf-8')).hexdigest() for email in batch_emails]
+        
+        payload = {
+            'payload': json.dumps({
+                'schema': 'EMAIL_SHA256',
+                'data': hashed_emails
+            }),
+            'access_token': TFX_META_LONG_LIVED_TOKEN
+        }
+        response = requests.delete(url, data=payload)
+        logging.info(f"Batch {i // MAX_OPERATIONS_PER_REQUEST + 1} Remove Response: {response.json()}")
+        if response.json().get('num_received') >= 1 and response.json().get('num_invalid_entries') == 0:
+            logging.info(f"The email batch was successfully removed from the TFX Active Users List")
+        else:
+            logging.info("The email insertion was not successful.")
+
+############ REMOVE FROM GOOGLE ADS LISTS ############
 def remove_emails_from_customer_list(client, customer_id, user_list_id, email_addresses):
     user_data_service = client.get_service("UserDataService")
     all_success = True
@@ -102,7 +146,7 @@ def remove_emails_from_customer_list(client, customer_id, user_list_id, email_ad
 
     return all_success, failed_emails
 
-def remove_emails_from_google_ads():
+def remove_emails_from_google_and_meta_ads():
     url = "https://api.intercom.io/contacts/search"
     base_url = "https://api.intercom.io/contacts"
     created_at_max = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) - 86400 # Intercom only allows to filter by dates, not datetimes
@@ -180,6 +224,12 @@ def remove_emails_from_google_ads():
             emails_list = [contact['email'] for contact in contacts]
             logging.info(emails_list)
 
+            # Remove emails from Meta Ads custom audience
+            if app['app_name'] == 'TFX':
+                if meta_test_credentials():
+                    meta_remove_users_from_custom_audience(emails_list)
+
+            # Remove emails from Google Ads user list
             try:
                 # Replace with your actual customer ID and user list ID 
                 customer_id = app['app_google_ads_id'] # Google Ads Account ID
@@ -1082,13 +1132,13 @@ if __name__ == "__main__":
 
     # Immediate execution upon deployment
     #time.sleep(int(OFFSET_BT_SCRIPTS))
-
+    remove_emails_from_google_and_meta_ads()
     # Schedule the tasks to run daily at 12:00 PM UTC TIME
     scheduler.add_job(fetch_GA4_sessions, 'cron', hour=11, minute=6)
     scheduler.add_job(fetch_ga4_events, 'cron', hour=11, minute=4)
     scheduler.add_job(fetch_intercom_contacts, 'cron', hour=11, minute=0)
     scheduler.add_job(update_coupons_data, 'cron', hour=11, minute=2)
     scheduler.add_job(update_intercom_contacts, 'cron', hour=11, minute=8)
-    scheduler.add_job(remove_emails_from_google_ads, 'cron', hour=14, minute=0)
+    scheduler.add_job(remove_emails_from_google_and_meta_ads, 'cron', hour=14, minute=0)
     #scheduler.add_job(fetch_transactions, 'cron', hour=6, minute=int(OFFSET_BT_SCRIPTS) / 60)  # Assuming OFFSET_BT_SCRIPTS is in seconds
     scheduler.start()
