@@ -146,6 +146,179 @@ def remove_emails_from_customer_list(client, customer_id, user_list_id, email_ad
 
     return all_success, failed_emails
 
+################ ADD EMAILS LISTS TO GOOGLE ADS LISTS ############
+def add_emails_to_customer_list(client, customer_id, user_list_id, email_addresses):
+    user_data_service = client.get_service("UserDataService")
+    all_success = True
+    failed_emails = []
+
+    # Split email addresses into batches
+    for i in range(0, len(email_addresses), MAX_OPERATIONS_PER_REQUEST):
+        batch_emails = email_addresses[i:i + MAX_OPERATIONS_PER_REQUEST]
+        user_data_operations = []
+
+        for email_address in batch_emails:
+            # Hash the email address using SHA-256
+            hashed_email = hashlib.sha256(email_address.encode('utf-8')).hexdigest()
+            #logging.info(f'Hashed email: {hashed_email}')
+
+            # Create a user identifier with the hashed email
+            user_identifier = client.get_type("UserIdentifier")
+            user_identifier.hashed_email = hashed_email
+
+            # Create the user data
+            user_data = client.get_type("UserData")
+            user_data.user_identifiers.append(user_identifier)
+
+            # Create the operation to add the user to the user list
+            user_data_operation = client.get_type("UserDataOperation")
+            user_data_operation.create = user_data
+
+            user_data_operations.append(user_data_operation)
+
+        # Create the metadata for the user list
+        customer_match_user_list_metadata = client.get_type("CustomerMatchUserListMetadata")
+        customer_match_user_list_metadata.user_list = f'customers/{customer_id}/userLists/{user_list_id}'
+
+        # Create the request
+        request = client.get_type("UploadUserDataRequest")
+        request.customer_id = customer_id
+        request.operations.extend(user_data_operations)
+        request.customer_match_user_list_metadata = customer_match_user_list_metadata
+
+        #logging.info(f'Request: {request}')
+
+        try:
+            # Make the upload user data request
+            response = user_data_service.upload_user_data(request=request)
+            logging.info(f'Response: {response}')
+            
+            # Check for partial failures
+            if hasattr(response, 'partial_failure_error') and response.partial_failure_error:
+                logging.error(f'Partial failure error: {response.partial_failure_error}')
+                for error in response.partial_failure_error.errors:
+                    operation_index = error.location.field_path_elements[0].index
+                    failed_email = batch_emails[operation_index]
+                    failed_emails.append(failed_email)
+                    logging.error(f'Failed to add user with email {failed_email}: {error.error_code} - {error.message}')
+                all_success = False
+            else:
+                logging.info(f'Successfully added batch of users to user list {user_list_id}')
+        except GoogleAdsException as ex:
+            logging.error(f'Request failed with status {ex.error.code().name}')
+            logging.error(f'Error message: {ex.error.message}')
+            logging.error('Errors:')
+            for error in ex.failure.errors:
+                logging.error(f'\t{error.error_code}: {error.message}')
+            all_success = False
+            failed_emails.extend(batch_emails)
+
+    return all_success, failed_emails
+
+################ ADDS EMAILS TO GOOGLE AND META ADS LISTS ############
+def add_emails_to_google_and_meta_ads():
+    url = "https://api.intercom.io/contacts/search"
+    base_url = "https://api.intercom.io/contacts"
+    created_at_max = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) - 86400 # Intercom only allows to filter by dates, not datetimes
+    created_at_min = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) - 86400 # LOGIC FOR JUST THE DAY BEFORE. For custom timeframes use the 2 lines below
+    #created_at_max = int(datetime.datetime.strptime("2024-06-16 13:59:59", "%Y-%m-%d %H:%M:%S").timestamp())# UTC TIME
+    #created_at_min = int(datetime.datetime.strptime("2024-06-16 14:00:00", "%Y-%m-%d %H:%M:%S").timestamp())# UTC TIME
+    config_data = yaml.safe_load(GOOGLE_ADS_CONFIG)
+    googleads_client = GoogleAdsClient.load_from_dict(config_data)
+    for app in APPS_CONFIG:
+        if app["app_name"] != 'SR': # SR and SATC repeat the same data, so only need to update once
+            headers = {
+            "Content-Type": "application/json",
+            "Intercom-Version": "2.10",
+            "Authorization": app['api_icm_token']
+            }
+            next_page_params = None
+            contacts = []
+
+            while True:
+                payload = {
+                "query": {
+                    "operator": "AND",
+                    "value": [
+                    {
+                        "operator": "OR",
+                        "value": [
+                        {
+                        "field": "custom_attributes.installed_at",
+                        "operator": ">",
+                        "value": created_at_min # Unix Timestamp for initial date
+                        },
+                        {
+                        "field": "custom_attributes.installed_at",
+                        "operator": "=",
+                        "value": created_at_min # Unix Timestamp for final date
+                        }
+                    ]
+                    },
+                    {
+                        "operator": "OR",
+                        "value": [
+                        {
+                        "field": "custom_attributes.installed_at",
+                        "operator": "<",
+                        "value": created_at_max # Unix Timestamp for initial date
+                        },
+                        {
+                        "field": "custom_attributes.installed_at",
+                        "operator": "=",
+                        "value": created_at_max # Unix Timestamp for final date
+                        }
+                    ]
+                    }
+                    ]
+                },
+                "pagination": {
+                    "per_page": 150,
+                    "starting_after": next_page_params
+                }
+                }
+            
+                response = requests.post(url, json=payload, headers=headers)
+                #time.sleep(0.1)
+                if response.status_code != 200:
+                    logging.error(f"Error: {response.status_code}")
+                    continue
+
+                data_temp = response.json()
+                next_page_params = data_temp.get('pages',{}).get('next',{}).get('starting_after')
+                contacts.extend(data_temp.get('data',{}))
+                logging.info(f"##########{app['app_name']} Contacts fetched: {len(contacts)} ##########") if app['app_name'] not in ['SR', 'SATC'] else logging.info(f"##########COD Contacts fetched: {len(contacts)} ##########")
+                if not next_page_params:
+                        break  # Exit the loop if there are no more pages.
+            
+            emails_list = [contact['email'] for contact in contacts]
+            logging.info(emails_list)
+            
+            try:
+                # Replace with your actual customer ID and user list ID 
+                customer_id = app['app_google_ads_id'] # Google Ads Account ID
+                user_list_id = app['app_google_ads_id']
+                email_addresses = emails_list
+                success, failed_emails = add_emails_to_customer_list(googleads_client, customer_id, user_list_id, email_addresses)
+                
+                if success:
+                    logging.info(f'All emails were successfully added to user list {user_list_id} from {app["app_name"]}.')
+                else:
+                    if failed_emails:
+                        logging.error(f'Failed to add the following emails: {failed_emails}')
+                    else:
+                        logging.error(f'All emails failed to be added.')
+            except GoogleAdsException as ex:
+                logging.error(f'Request failed with status {ex.error.code().name}')
+                logging.error(f'Error message: {ex.error.message}')
+                logging.error('Errors:')
+                for error in ex.failure.errors:
+                    logging.error(f'\t{error.error_code}: {error.message}')
+                sys.exit(1)
+            except ValueError as ve:
+                logging.error(f'ValueError: {ve}')
+                sys.exit(1)
+
 def remove_emails_from_google_and_meta_ads():
     url = "https://api.intercom.io/contacts/search"
     base_url = "https://api.intercom.io/contacts"
@@ -1132,13 +1305,14 @@ if __name__ == "__main__":
 
     # Immediate execution upon deployment
     #time.sleep(int(OFFSET_BT_SCRIPTS))
-    
+    add_emails_to_google_and_meta_ads()
     # Schedule the tasks to run daily at 12:00 PM UTC TIME
     scheduler.add_job(fetch_GA4_sessions, 'cron', hour=11, minute=6)
     scheduler.add_job(fetch_ga4_events, 'cron', hour=11, minute=4)
     scheduler.add_job(fetch_intercom_contacts, 'cron', hour=11, minute=0)
     scheduler.add_job(update_coupons_data, 'cron', hour=11, minute=2)
     scheduler.add_job(update_intercom_contacts, 'cron', hour=11, minute=8)
-    scheduler.add_job(remove_emails_from_google_and_meta_ads, 'cron', hour=14, minute=0)
+    scheduler.add_job(add_emails_to_google_and_meta_ads, 'cron', hour=14, minute=0)
+    scheduler.add_job(remove_emails_from_google_and_meta_ads, 'cron', hour=14, minute=2)
     #scheduler.add_job(fetch_transactions, 'cron', hour=6, minute=int(OFFSET_BT_SCRIPTS) / 60)  # Assuming OFFSET_BT_SCRIPTS is in seconds
     scheduler.start()
