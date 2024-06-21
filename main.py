@@ -60,8 +60,8 @@ def meta_test_credentials():
 def meta_add_users_to_custom_audience(user_emails):
     url = f"https://graph.facebook.com/v12.0/{TFX_META_CUSTOM_AUDIENCE_ID}/users"
 
-    for i in range(0, len(user_emails), 10):
-        batch_emails = user_emails[i:i + 10]
+    for i in range(0, len(user_emails), MAX_OPERATIONS_PER_REQUEST):
+        batch_emails = user_emails[i:i + MAX_OPERATIONS_PER_REQUEST]
         hashed_emails = [hashlib.sha256(email.encode('utf-8')).hexdigest() for email in batch_emails]
         
         payload = {
@@ -72,7 +72,7 @@ def meta_add_users_to_custom_audience(user_emails):
             'access_token': TFX_META_LONG_LIVED_TOKEN
         }
         response = requests.post(url, data=payload)
-        logging.info(f"Batch {i // 10 + 1} Add Response: {response.json()}")
+        logging.info(f"Batch {i // MAX_OPERATIONS_PER_REQUEST + 1} Add Response: {response.json()}")
         if response.json().get('num_received') >= 1 and response.json().get('num_invalid_entries') == 0:
             logging.info(f"The email batch was successfully added to the TFX Active Users List")
         else:
