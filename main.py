@@ -438,7 +438,8 @@ def remove_emails_from_google_and_meta_ads():
                 email_addresses = emails_list
                 success, failed_emails = remove_emails_from_customer_list(googleads_client, customer_id, user_list_id, email_addresses)
                 if app['app_name'] == 'PC' or app['app_name'] == 'ICU':
-                    success2, failed_emails2 = add_emails_to_customer_list(googleads_client, customer_id, user_list_id, email_addresses)
+                    lost_user_list_id = app['app_lost_user_list']
+                    success2, failed_emails2 = add_emails_to_customer_list(googleads_client, customer_id, lost_user_list_id, email_addresses)
                     logging.info(f'Executing addition of emails to {app["app_name"]} lost user list: {success2}')
                     logging.error(f'Emails failed to be added: {failed_emails2}')
                 
