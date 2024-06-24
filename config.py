@@ -19,7 +19,8 @@ APPS_CONFIG = [
       "api_icm_token": os.getenv("APP1_API_ICM_TOKEN"),
       "api_icm_id": os.getenv("APP1_API_ICM_ID"),
       "app_google_ads_id": os.getenv("PC_GOOGLE_ADS_ID"),
-      "app_user_list": os.getenv("PC_USER_LIST")
+      "app_user_list": os.getenv("PC_USER_LIST"),
+      "app_lost_user_list": os.getenv("PC_LOST_USER_LIST")
     },
     {
       "app_name": os.getenv("APP2_Name"),
@@ -28,7 +29,8 @@ APPS_CONFIG = [
       "api_icm_token": os.getenv("APP2_API_ICM_TOKEN"),
       "api_icm_id": os.getenv("APP2_API_ICM_ID"),
       "app_google_ads_id": os.getenv("ICU_GOOGLE_ADS_ID"),
-      "app_user_list": os.getenv("ICU_USER_LIST")
+      "app_user_list": os.getenv("ICU_USER_LIST"),
+      "app_lost_user_list": os.getenv("ICU_LOST_USER_LIST")
     },
     {
       "app_name": os.getenv("APP3_Name"),

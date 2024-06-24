@@ -437,6 +437,10 @@ def remove_emails_from_google_and_meta_ads():
                 user_list_id = app['app_user_list']
                 email_addresses = emails_list
                 success, failed_emails = remove_emails_from_customer_list(googleads_client, customer_id, user_list_id, email_addresses)
+                if app['app_name'] == 'PC' or app['app_name'] == 'ICU':
+                    success2, failed_emails2 = add_emails_to_customer_list(googleads_client, customer_id, user_list_id, email_addresses)
+                    logging.info(f'Executing addition of emails to {app["app_name"]} lost user list: {success2}')
+                    logging.error(f'Emails failed to be added: {failed_emails2}')
                 
                 if success:
                     logging.info(f'All emails were successfully removed.')
@@ -1333,7 +1337,7 @@ if __name__ == "__main__":
 
     # Immediate execution upon deployment
     #time.sleep(int(OFFSET_BT_SCRIPTS))
-
+    remove_emails_from_google_and_meta_ads()
     # Schedule the tasks to run daily at 12:00 PM UTC TIME
     scheduler.add_job(fetch_GA4_sessions, 'cron', hour=11, minute=6)
     scheduler.add_job(fetch_ga4_events, 'cron', hour=11, minute=4)
