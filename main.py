@@ -1325,9 +1325,14 @@ def update_intercom_contacts():
                     }
                 }
             # Update the contacts
-            response = requests.put(url, json=payload, headers=headers)
-            data = response.json()
-            logging.info(data)
+            try:
+                response = requests.put(url, json=payload, headers=headers)
+                data = response.json()
+                logging.info(f'Updated contact {row["email"]} in app {app["app_name"]} with response {response.status_code}.')
+            except:
+                logging.error(f"Failed to update contact {row['email']} in app {app['app_name']}.")
+            time.sleep(0.05)
+            #logging.info(data)
         logging.info(f"App {app['app_name']} contacts updated. Total contacts: {len(df)}")
     
 
@@ -1337,6 +1342,7 @@ if __name__ == "__main__":
     scheduler = BlockingScheduler()
 
     # Immediate execution upon deployment
+    update_intercom_contacts()
     #time.sleep(int(OFFSET_BT_SCRIPTS))
     
     # Schedule the tasks to run daily at 12:00 PM UTC TIME
