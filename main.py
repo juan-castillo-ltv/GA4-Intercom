@@ -6,6 +6,7 @@ import pandas as pd
 import logging
 import json
 import psycopg2
+import math
 from psycopg2 import sql
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
