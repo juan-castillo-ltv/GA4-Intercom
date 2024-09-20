@@ -548,7 +548,7 @@ def add_contacts_to_brevo(app, df, list_id, headers, batch_size=500):
         
     return contacts
 
-def connect_to_db_sqlalchemy(credentials):
+def connect_to_db_sqlalchemy_updated(credentials):
     try:
         # Construct the connection string
         user = credentials['user']
@@ -604,7 +604,7 @@ def load_customer_summary_active(engine):
 
 def fetch_update_brevo_contacts():
     api_key = BREVO_API_TOKEN
-    engine_legacy = connect_to_db_sqlalchemy(DB_CREDENTIALS)
+    engine_legacy = connect_to_db_sqlalchemy_updated(DB_CREDENTIALS)
     active_customer_tables = {}
     df_users = load_customer_summary_active(engine_legacy)
     for app in APPS_CONFIG:
