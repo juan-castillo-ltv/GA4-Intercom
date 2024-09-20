@@ -1342,7 +1342,7 @@ if __name__ == "__main__":
     scheduler = BlockingScheduler()
 
     # Immediate execution upon deployment
-    update_intercom_contacts()
+    
     #time.sleep(int(OFFSET_BT_SCRIPTS))
     
     # Schedule the tasks to run daily at 12:00 PM UTC TIME
