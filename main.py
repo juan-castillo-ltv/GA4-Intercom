@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from config import APPS_CONFIG, DB_CREDENTIALS, UPDATE_INTERVAL, TIME_DELAY, OFFSET_BT_SCRIPTS, LTV_SAAS_GOOGLE_ADS_ID, GOOGLE_ADS_CONFIG
 from config import TFX_META_APP_ID, TFX_META_APP_SECRET, TFX_META_LONG_LIVED_TOKEN, TFX_META_AD_ACCOUNT_ID, TFX_META_CUSTOM_AUDIENCE_ID
-from config import GA4_OAUTH
+from config import GA4_OAUTH, BREVO_API_TOKEN
 import yaml
 import hashlib
 import sys
@@ -460,6 +460,166 @@ def remove_emails_from_google_and_meta_ads():
             except ValueError as ve:
                 logging.error(f'ValueError: {ve}')
                 sys.exit(1)
+
+def add_contacts_to_brevo(app, df, list_id, headers, batch_size=500):
+    total_rows = len(df)
+    num_batches = math.ceil(total_rows / batch_size)
+    
+    for i in range(num_batches):
+        start_idx = i * batch_size
+        end_idx = min(start_idx + batch_size, total_rows)
+        batch_df = df.iloc[start_idx:end_idx]
+
+        contacts = []
+        for index, row in batch_df.iterrows():
+            contact = {
+                "email": row['email'],
+                "ext_id": row['id'],
+                "attributes": {
+                    "SHOP_NAME": row['shop_name'],
+                    "APP": row['app'],
+                    "ACTIVE": "Yes" if row['is_active'] == True else "No",
+                    "SHOP_URL": row['shopify_domain'],
+                    "SHOPIFY_PLAN": row['shopify_plan'],
+                    "INSTALLED_AT": row['last_install'].strftime('%Y-%m-%d') if not pd.isna(row['last_install']) else None,
+                    "UNINSTALLED_AT": row['uninstalled'].strftime('%Y-%m-%d') if not pd.isna(row['uninstalled']) else None,
+                    "LAST_SUBSCRIPTION_CHARGED_AT": row['last_transaction_date'].strftime('%Y-%m-%d') if not pd.isna(row['last_transaction_date']) else None,
+                    "NUMBER_OF_SUBSCRIPTION_CHARGES": row['transaction_count'],
+                    "SUBSCRIPTION_CHARGE": row['last_transaction_gross_amount'],
+                    "FIRST_INSTALL": row['first_install'].strftime('%Y-%m-%d') if not pd.isna(row['first_install']) else None,
+                    "STORE_OPEN_AT": row['shop_reopen'].strftime('%Y-%m-%d') if not pd.isna(row['shop_reopen']) else None,
+                    "STORE_CLOSED_AT": row['shop_closed'].strftime('%Y-%m-%d') if not pd.isna(row['shop_closed']) else None,
+                    "IS_OPEN": "Yes" if row['is_open'] == True else "No",
+                    "DAYS_UNINSTALLED": row['days_uninstalled'],
+                    "DAYS_CLOSED": row['days_closed'],
+                    "TRIAL_DAYS_REMAINING": row['trial_days_remaining'],
+                    "DAYS_SINCE_BILLED": row['days_since_billed'],
+                    "PAID_ACTIVE": "Yes" if row['paid_active'] == True else "No",
+                    "COUNTRY": row['country'],
+                    "REGION": row['region'],
+                    "CITY": row['city'],
+                    "PLAN": row['shopify_plan'],
+                    "TIME_CLOSED": row['time_closed'],
+                    "TIME_UNINSTALLED": row['time_uninstalled'],
+                    "SIGNED_UP": row['first_install'].strftime('%Y-%m-%d') if not pd.isna(row['first_install']) else None,
+                    "SHOPIFY_URL_RAW": row['shopify_domain'].split('.myshopify.com')[0] if '.myshopify.com' in row['shopify_domain'] else row['shopify_domain'],
+                    "COUPON_REDEEMED": row['coupon_redeemed'],
+                    "COUPON_REDEEMED_AT": row['coupon_redeemed_at'].strftime('%Y-%m-%d') if not pd.isna(row['coupon_redeemed_at']) else None
+                },
+            }
+
+            # Add the correct attributes based on the `app` value
+            if app == 'PC':
+                contact["attributes"].update({
+                    "PC_INSTALLED": "Yes"
+                })
+            elif app == 'ICU':
+                contact["attributes"].update({
+                    "ICU_INSTALLED": "Yes"
+                })
+            elif app == 'TFX':    
+                contact["attributes"].update({
+                    "TFX_INSTALLED": "Yes"
+                })
+            elif app == 'SR':
+                contact["attributes"].update({
+                    "SR_INSTALLED": "Yes"
+                })
+            elif app == 'SATC':
+                contact["attributes"].update({
+                    "SATC_INSTALLED": "Yes"
+                })
+            
+            contacts.append(contact)
+
+        url = 'https://api.brevo.com/v3/contacts/import'
+        payload = {
+            "listIds": [list_id],  # Add your list ID(s) here
+            "updateEnabled": True,  # Set to True to update existing contacts
+            "jsonBody": contacts  # Directly pass the list of contacts here
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()  # Raises an HTTPError for bad responses
+            logging.info(f"Batch {i+1}/{num_batches}: Contacts successfully added to list ID {list_id}.")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Batch {i+1}/{num_batches}: Failed to add contacts. Error: {e}. Response: {response.text}")
+        
+    return contacts
+
+def connect_to_db_sqlalchemy(credentials):
+    try:
+        # Construct the connection string
+        user = credentials['user']
+        password = credentials['password']
+        host = credentials['host']
+        dbname = credentials['database']
+        port = credentials['port']
+        sslmode = credentials['sslmode']
+        connection_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}?sslmode={sslmode}"
+        # Create and return the engine
+        engine = create_engine(connection_string)
+        return engine
+    except Exception as e:
+        logging.error(f"Failed to create engine: {e}")
+        raise  # Raise an exception to be handled where connect_to_db is called
+
+def load_customer_summary_active(engine):
+    float_columns = ['total_gross_amount', 'total_net_amount', 'first_transaction_gross_amount', 'last_transaction_gross_amount']
+    int_columns = ['time_uninstalled', 'time_closed', 'days_uninstalled', 'days_closed', 'days_since_billed', 'transaction_count', 'trial_days_remaining']
+    datetime_columns = ['first_install', 'last_install', 'uninstalled', 'shop_closed', 'shop_reopen', 
+                        'subs_activated', 'subs_expired', 'subs_canceled', 'subs_accepted',
+                        'first_transaction_date', 'last_transaction_date']
+    
+    try:
+        query = f'''
+            SELECT * FROM intercom_customers_full WHERE is_active = true
+        '''
+        with engine.connect() as connection:
+            result = connection.execute(text(query))
+            df_users = pd.DataFrame(result.fetchall())
+            df_users.columns = result.keys()
+
+            # Convert float columns to float and replace NaN with None
+            for col in float_columns:
+                df_users[col] = df_users[col].replace([np.inf, -np.inf], np.nan).fillna(0)
+                df_users[col] = df_users[col].astype(float)
+            
+            # Convert int columns to int (handle NaNs if they exist)
+            for col in int_columns:
+                df_users[col] = df_users[col].fillna(0).astype(int)  # Assuming NaN should be replaced by 0
+                
+            # Convert datetime columns to datetime
+            for col in datetime_columns:
+                df_users[col] = pd.to_datetime(df_users[col])
+        
+        df_users = df_users.dropna(subset=['email'])
+
+        return df_users
+    
+    except Exception as e:
+        logging.error(f"Error loading customer_summary table: {e}")
+        return pd.DataFrame()
+
+def fetch_update_brevo_contacts():
+    api_key = BREVO_API_TOKEN
+    engine_legacy = connect_to_db_sqlalchemy(DB_CREDENTIALS)
+    active_customer_tables = {}
+    df_users = load_customer_summary_active(engine_legacy)
+    for app in APPS_CONFIG:
+        app_name = app['app_name']
+        active_customer_tables[app_name] = df_users[df_users['app'] == app_name]
+        logging.info(f"{app['app_name']} Customers loaded. Rows: {len(df_users[df_users['app'] == app_name])}")
+    headers = {
+        'accept': 'application/json',
+        'api-key': api_key,
+        'content-type': 'application/json'
+    }
+
+    for app in APPS_CONFIG:
+        print(f"Adding active contacts from {app['app_name']} to Brevo list ID {app['brevo_active_list']}...")
+        cont = add_contacts_to_brevo(app['app_name'],active_customer_tables[app['app_name']], int(app['brevo_active_list']), headers)   
 
 def update_coupons_data():
     conn = connect_to_db()  # Replace with your actual connection function
@@ -1342,7 +1502,7 @@ if __name__ == "__main__":
     scheduler = BlockingScheduler()
 
     # Immediate execution upon deployment
-    
+    fetch_update_brevo_contacts()
     #time.sleep(int(OFFSET_BT_SCRIPTS))
     
     # Schedule the tasks to run daily at 12:00 PM UTC TIME
