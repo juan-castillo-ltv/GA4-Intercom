@@ -622,6 +622,177 @@ def fetch_update_brevo_contacts():
         print(f"Adding active contacts from {app['app_name']} to Brevo list ID {app['brevo_active_list']}...")
         cont = add_contacts_to_brevo(app['app_name'],active_customer_tables[app['app_name']], int(app['brevo_active_list']), headers)   
 
+def brevo_uninstalled_user_removal():
+    api_key = BREVO_API_TOKEN
+    created_at_max = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) - 86400 # Intercom only allows to filter by dates, not datetimes
+    created_at_min = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) - 86400
+    logging.info(f"Created at max: {created_at_max}, created at min: {created_at_min}")
+    intercom_url = "https://api.intercom.io/contacts/search"
+
+    for app in APPS_CONFIG:
+        intercom_headers = {
+        "Content-Type": "application/json",
+        "Intercom-Version": "2.10",
+        "Authorization": app['api_icm_token']
+        }
+        next_page_params = None
+        contacts = []
+
+        while True:
+            intercom_payload = {
+            "query": {
+                "operator": "AND",
+                "value": [
+                {
+                    "operator": "OR",
+                    "value": [
+                    {
+                    "field": "custom_attributes.uninstalled_at",
+                    "operator": ">",
+                    "value": created_at_min # Unix Timestamp for initial date
+                    },
+                    {
+                    "field": "custom_attributes.uninstalled_at",
+                    "operator": "=",
+                    "value": created_at_min # Unix Timestamp for final date
+                    }
+                ]
+                },
+                {
+                    "operator": "OR",
+                    "value": [
+                    {
+                    "field": "custom_attributes.uninstalled_at",
+                    "operator": "<",
+                    "value": created_at_max # Unix Timestamp for initial date
+                    },
+                    {
+                    "field": "custom_attributes.uninstalled_at",
+                    "operator": "=",
+                    "value": created_at_max # Unix Timestamp for final date
+                    }
+                ]
+                }
+                ]
+            },
+            "pagination": {
+                "per_page": 150,
+                "starting_after": next_page_params
+            }
+            }
+        
+            response = requests.post(intercom_url, json=intercom_payload, headers=intercom_headers)
+            #time.sleep(0.1)
+            if response.status_code != 200:
+                logging.error(f"Error: {response.text}")
+                continue
+
+            data_temp = response.json()
+            next_page_params = data_temp.get('pages',{}).get('next',{}).get('starting_after')
+            contacts.extend(data_temp.get('data',{}))
+            if not next_page_params:
+                    break  # Exit the loop if there are no more pages.
+
+        #Update APP_INSTALLED attributes:
+        # Mapping of app names to Brevo custom attributes
+        attribute_mapping = {
+            'PC': "PC_INSTALLED",
+            'ICU': "ICU_INSTALLED",
+            'TFX': "TFX_INSTALLED",
+            'SR': "SR_INSTALLED",
+            'SATC': "SATC_INSTALLED"
+        }
+
+        # Update the custom attributes in Brevo based on the app uninstallation
+        for contact in contacts:
+            
+            if app['app_name'] in attribute_mapping:
+                attribute_name = attribute_mapping[app['app_name']]
+                
+                # Create the payload to update Brevo contact attributes
+                update_payload = {
+                    "attributes": {
+                        attribute_name: False,  # Set the attribute to "No" in Brevo
+                        "ACTIVE" : False,
+                        "PAID_ACTIVE" : False
+                    }
+                }
+
+                # URL for updating a Brevo contact (replace {email} with the actual contact email)
+                update_url = f'https://api.brevo.com/v3/contacts/{contact["email"]}'
+                
+                # Headers for Brevo API request
+                brevo_headers = {
+                    'accept': 'application/json',
+                    'api-key': api_key,   # Your Brevo API key
+                    'content-type': 'application/json',
+                }
+
+                try:
+                    # Make a PUT request to update the contact's attributes in Brevo
+                    response_update = requests.put(update_url, headers=brevo_headers, json=update_payload)
+                    response_update.raise_for_status()
+                    
+                    logging.info(f"Contact {contact['email']} successfully updated in Brevo with {attribute_name}: 'No'")
+                
+                except requests.exceptions.RequestException as e:
+                    logging.error(f"Failed to update Brevo contact {contact['email']}. Error: {e}. Response: {response_update.text}")
+
+
+
+        if app['app_name'] in ['PC','ICU','TFX']:
+            emails_list = [contact['email'] for contact in contacts]
+            logging.info(f"########## {app['app_name']} Contacts fetched: {len(emails_list)} ##########")
+            logging.info(emails_list)
+        elif app['app_name']=='SR':
+            emails_list = [contact['email'] for contact in contacts if contact.get('custom_attributes',{}).get('App name')=='SalesRocket']
+            logging.info(f"########## {app['app_name']} Contacts fetched: {len(emails_list)} ##########")
+            logging.info(emails_list)
+        else:
+            emails_list = [contact['email'] for contact in contacts if contact.get('custom_attributes',{}).get('App name')=='Sticky']
+            logging.info(f"########## {app['app_name']} Contacts fetched: {len(emails_list)} ##########")
+            logging.info(emails_list)
+
+        #Update Brevo Active and Inactive Users Lists
+        list_id_removal = app['brevo_active_list']
+        list_id_add = app['brevo_inactive_list']
+        contact_emails = emails_list
+
+        headers = {
+            'accept': 'application/json',
+            'api-key': api_key,
+            'content-type': 'application/json',
+        }
+
+        payload_removal = {
+            "emails": contact_emails,
+            "all": False
+        }
+
+        url_removal = f'https://api.brevo.com/v3/contacts/lists/{list_id_removal}/contacts/remove' 
+
+        try:
+            response_removal = requests.post(url_removal, headers=headers, json=payload_removal)
+            #logging.info(json.dumps(payload, indent=4))
+            response_removal.raise_for_status()  # Raises an HTTPError for bad responses
+            logging.info(f"Contacts successfully removed from list ID {list_id_removal}. Status: {response_removal.text}")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Failed to remove contacts. Error: {e}. Response: {response_removal.text}")
+
+        payload_add = {
+            "emails": contact_emails,
+        }
+
+        url_add = f'https://api.brevo.com/v3/contacts/lists/{list_id_add}/contacts/add'
+
+        try:
+            response_add = requests.post(url_add, headers=headers, json=payload_add)
+            #logging.info(json.dumps(payload, indent=4))
+            response_add.raise_for_status()  # Raises an HTTPError for bad responses
+            logging.info(f"Contacts successfully added to list ID {list_id_add}. Status: {response_add.text}")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Failed to add contacts. Error: {e}. Response: {response_add.text}")
+
 def update_coupons_data():
     conn = connect_to_db()  # Replace with your actual connection function
     if conn is not None:
