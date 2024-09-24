@@ -314,7 +314,7 @@ def add_emails_to_google_and_meta_ads():
                 if not next_page_params:
                         break  # Exit the loop if there are no more pages.
             
-            emails_list = [contact['email'] for contact in contacts]
+            emails_list = [contact['email'] for contact in contacts if contact['email'] is not None]
             logging.info(emails_list)
             
             # Add emails from Meta Ads custom audience
@@ -423,7 +423,7 @@ def remove_emails_from_google_and_meta_ads():
                 if not next_page_params:
                         break  # Exit the loop if there are no more pages.
             
-            emails_list = [contact['email'] for contact in contacts]
+            emails_list = [contact['email'] for contact in contacts if contact['email'] is not None]
             logging.info(emails_list)
 
             # Remove emails from Meta Ads custom audience
@@ -741,7 +741,7 @@ def brevo_uninstalled_user_removal():
 
 
         if app['app_name'] in ['PC','ICU','TFX']:
-            emails_list = [contact['email'] for contact in contacts]
+            emails_list = [contact['email'] for contact in contacts if contact['email'] is not None]
             logging.info(f"########## {app['app_name']} Contacts fetched: {len(emails_list)} ##########")
             logging.info(emails_list)
         elif app['app_name']=='SR':
