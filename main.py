@@ -1859,5 +1859,6 @@ if __name__ == "__main__":
     scheduler.add_job(remove_emails_from_google_and_meta_ads, 'cron', hour=13, minute=32)
     scheduler.add_job(fetch_update_brevo_contacts, 'cron', hour=13, minute=34)
     scheduler.add_job(brevo_uninstalled_user_removal, 'cron', hour=13, minute=36)
+    scheduler.add_job(update_paid_free_users_brevo, 'cron', hour=13, minute=38)
     #scheduler.add_job(fetch_transactions, 'cron', hour=6, minute=int(OFFSET_BT_SCRIPTS) / 60)  # Assuming OFFSET_BT_SCRIPTS is in seconds
     scheduler.start()
