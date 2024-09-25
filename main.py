@@ -7,6 +7,7 @@ import logging
 import json
 import psycopg2
 import math
+from itertools import islice
 from psycopg2 import sql
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
@@ -16,6 +17,7 @@ from config import GA4_OAUTH, BREVO_API_TOKEN
 import yaml
 import hashlib
 import sys
+
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -602,6 +604,71 @@ def load_customer_summary_active(engine):
     except Exception as e:
         logging.error(f"Error loading customer_summary table: {e}")
         return pd.DataFrame()
+
+def load_paid_active_users(engine):
+    try:
+        query = f'''
+            SELECT DISTINCT ON (email,app) email,app FROM intercom_customers_full 
+	            WHERE is_active = true AND paid_active = true
+        '''
+        with engine.connect() as connection:
+            result = connection.execute(text(query))
+            df_users = pd.DataFrame(result.fetchall())
+            df_users.columns = result.keys()
+        
+        df_users = df_users.dropna(subset=['email'])
+
+        return df_users
+    
+    except Exception as e:
+        logging.error(f"Error loading customer_summary table: {e}")
+        return pd.DataFrame()
+
+def load_free_active_users(engine):
+    try:
+        query = f'''
+            SELECT DISTINCT ON (email,app) email,app 
+                FROM intercom_customers_full 
+                WHERE is_active = true AND paid_active = false AND (app='ICU' or app='PC')
+                AND CASE
+                        WHEN app = 'ICU'::text THEN (first_install::date + '30 days'::interval)::date < CURRENT_DATE AT TIME ZONE 'America/New_York'
+                        WHEN app = 'TFX'::text AND first_install::date >= '2024-08-01'::date THEN (first_install::date + '7 days'::interval)::date < CURRENT_DATE AT TIME ZONE 'America/New_York'
+                        ELSE (first_install::date + '14 days'::interval)::date < CURRENT_DATE AT TIME ZONE 'America/New_York'
+                        END
+        '''
+        with engine.connect() as connection:
+            result = connection.execute(text(query))
+            df_users = pd.DataFrame(result.fetchall())
+            df_users.columns = result.keys()
+        
+        df_users = df_users.dropna(subset=['email'])
+
+        return df_users
+    
+    except Exception as e:
+        logging.error(f"Error loading customer_summary table: {e}")
+        return pd.DataFrame()
+
+def non_paid_active_users(engine):
+    try:
+        query = f'''
+            SELECT DISTINCT ON (email,app) email,app FROM intercom_customers_full 
+	            WHERE is_active = true AND paid_active = false
+                AND (app='TFX' or app='SR' or app='SATC')
+        '''
+        with engine.connect() as connection:
+            result = connection.execute(text(query))
+            df_users = pd.DataFrame(result.fetchall())
+            df_users.columns = result.keys()
+        
+        df_users = df_users.dropna(subset=['email'])
+
+        return df_users
+    
+    except Exception as e:
+        logging.error(f"Error loading customer_summary table: {e}")
+        return pd.DataFrame()
+
 
 def fetch_update_brevo_contacts():
     api_key = BREVO_API_TOKEN
@@ -1666,7 +1733,112 @@ def update_intercom_contacts():
             time.sleep(0.05)
             #logging.info(data)
         logging.info(f"App {app['app_name']} contacts updated. Total contacts: {len(df)}")
-    
+
+def update_paid_free_users_brevo():
+    api_key = BREVO_API_TOKEN
+    engine_legacy = connect_to_db_sqlalchemy_updated(DB_CREDENTIALS)
+    paid_active_customer_tables = {}
+    free_active_customer_tables = {}
+    non_paid_active_customer_tables = {}
+    df_paid_users = load_paid_active_users(engine_legacy)
+    logging.info(f"Paid Users loaded. Rows: {len(df_paid_users)}")
+    df_free_users = load_free_active_users(engine_legacy)
+    logging.info(f"Free Users loaded. Rows: {len(df_free_users)}")
+    df_nonpaid_users = non_paid_active_users(engine_legacy)
+    logging.info(f"Non-Paid Users loaded. Rows: {len(df_nonpaid_users)}")
+    for app in APPS_CONFIG:
+        app_name = app['app_name']
+        paid_active_customer_tables[app_name] = df_paid_users[df_paid_users['app'] == app_name]
+        logging.info(f"{app['app_name']} Paid Users loaded. Rows: {len(df_paid_users[df_paid_users['app'] == app_name])}")
+        if app_name == 'ICU' or app_name == 'PC':
+            free_active_customer_tables[app_name] = df_free_users[df_free_users['app'] == app_name]
+            logging.info(f"{app['app_name']} Free Users loaded. Rows: {len(df_free_users[df_free_users['app'] == app_name])}")
+        else:
+            non_paid_active_customer_tables[app_name] = df_nonpaid_users[df_nonpaid_users['app'] == app_name]
+            logging.info(f"{app['app_name']} Non-Paid Users loaded. Rows: {len(df_nonpaid_users[df_nonpaid_users['app'] == app_name])}")        
+
+    #Helper functions definition:
+    # Function to split list into chunks
+    def chunked_iterable(iterable, size):
+        """Yield successive chunks from the iterable."""
+        it = iter(iterable)
+        while True:
+            chunk = list(islice(it, size))
+            if not chunk:
+                break
+            yield chunk
+
+    def process_chunk(url, chunk, action_type):
+        """Process a chunk of emails with graceful error handling."""
+        try:
+            response = requests.post(url, headers=headers, json={"emails": chunk})
+            response.raise_for_status()
+            logging.info(f"Successfully processed chunk: {action_type}. Status: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            # Log the error message
+            error_message = e.response.json().get('message', '')
+            
+            # If it's a duplicate contact error, log it and continue
+            if "Contact already in list" in error_message or "does not exist" in error_message:
+                logging.warning(f"Duplicate or non-existing contact error in {action_type}. Continuing. Error: {error_message}")
+            else:
+                logging.error(f"Error processing chunk: {e}. Response: {e.response.text}")
+                
+                # Retry with smaller chunks (break it into halves)
+                if len(chunk) > 1:
+                    logging.info(f"Retrying chunk in smaller batches for {action_type}")
+                    mid_index = len(chunk) // 2
+                    process_chunk(url, chunk[:mid_index], action_type)
+                    process_chunk(url, chunk[mid_index:], action_type)
+                else:
+                    logging.error(f"Failed to process single email: {chunk[0]} in {action_type}. Skipping.")
+
+    # Main logic
+    CHUNK_SIZE = 140  # Adjust chunk size
+    headers = {
+        'accept': 'application/json',
+        'api-key': api_key,
+        'content-type': 'application/json',
+    }
+
+    for app in APPS_CONFIG:
+        app_name = app['app_name']
+        list_id_paid = app['brevo_paid_list']
+        list_id_free = app['brevo_free_list']
+
+        if app_name in ['ICU', 'PC']:  # Apps that have both paid and free user lists
+            paid_users = paid_active_customer_tables[app_name]['email'].to_list()
+            free_users = free_active_customer_tables[app_name]['email'].to_list()
+            
+            url_paid_add = f'https://api.brevo.com/v3/contacts/lists/{list_id_paid}/contacts/add'
+            url_free_remove = f'https://api.brevo.com/v3/contacts/lists/{list_id_free}/contacts/remove'
+            url_free_add = f'https://api.brevo.com/v3/contacts/lists/{list_id_free}/contacts/add'
+            url_paid_remove = f'https://api.brevo.com/v3/contacts/lists/{list_id_paid}/contacts/remove'
+            
+            # Process paid users: Add to Paid, Remove from Free
+            for chunk in chunked_iterable(paid_users, CHUNK_SIZE):
+                process_chunk(url_paid_add, chunk, f"adding to {app_name} Paid list")
+                process_chunk(url_free_remove, chunk, f"removing from {app_name} Free list")
+
+            # Process free users: Add to Free, Remove from Paid
+            for chunk in chunked_iterable(free_users, CHUNK_SIZE):
+                process_chunk(url_free_add, chunk, f"adding to {app_name} Free list")
+                process_chunk(url_paid_remove, chunk, f"removing from {app_name} Paid list")
+
+        else:  # For SR, SATC, and TFX apps (No free users)
+            paid_users = paid_active_customer_tables[app_name]['email'].to_list()
+            non_paid_users = non_paid_active_customer_tables[app_name]['email'].to_list()
+            
+            url_paid_add = f'https://api.brevo.com/v3/contacts/lists/{list_id_paid}/contacts/add'
+            url_paid_remove = f'https://api.brevo.com/v3/contacts/lists/{list_id_paid}/contacts/remove'
+            
+            # Process paid users: Add to Paid list
+            for chunk in chunked_iterable(paid_users, CHUNK_SIZE):
+                process_chunk(url_paid_add, chunk, f"adding to {app_name} Paid list")
+            
+            # Remove non-paid users from Paid list
+            for chunk in chunked_iterable(non_paid_users, CHUNK_SIZE):
+                process_chunk(url_paid_remove, chunk, f"removing from {app_name} Paid list")
 
 
 if __name__ == "__main__":
