@@ -882,7 +882,9 @@ def update_intercom_conversations_weekly():
         tzinfo=datetime.timezone.utc
     )
     created_at_max = int(yesterday_end.astimezone(est).timestamp())
-    df_conversations = pd.DataFrame()    
+    df_conversations = pd.DataFrame()   
+
+    logging.info(created_at_min,created_at_max) 
 
     for app in APPS_CONFIG:
         next_page_params = None
@@ -1043,7 +1045,7 @@ def update_intercom_conversations_weekly():
     df_conversations['created_at'] = df_conversations['created_at'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')
     df_conversations['updated_at'] = pd.to_datetime(df_conversations['updated_at'], unit='s')
     df_conversations['updated_at'] = df_conversations['updated_at'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')
-    print(f"Convo dataset ready, Total conversations: {len(df_conversations)}")
+    logging.info(f"Convo dataset ready, Total conversations: {len(df_conversations)}")
     #insert_into_db_conversations(df_conversations)
 
 
