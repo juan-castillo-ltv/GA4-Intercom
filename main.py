@@ -863,7 +863,6 @@ def brevo_uninstalled_user_removal():
 
 def update_intercom_conversations_weekly():
     url = "https://api.intercom.io/conversations/search"
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s]: %(message)s', handlers=[logging.StreamHandler()])
     est = pytz.timezone('US/Eastern')
 
     # Get the current UTC time
@@ -884,7 +883,8 @@ def update_intercom_conversations_weekly():
     created_at_max = int(yesterday_end.astimezone(est).timestamp())
     df_conversations = pd.DataFrame()   
 
-    logging.info(created_at_min,created_at_max) 
+    logging.info(created_at_min) 
+    logging.info(created_at_max) 
 
     for app in APPS_CONFIG:
         next_page_params = None
