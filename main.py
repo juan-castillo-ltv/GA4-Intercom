@@ -17,6 +17,7 @@ from config import GA4_OAUTH, BREVO_API_TOKEN
 import yaml
 import hashlib
 import sys
+import pytz
 
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
@@ -859,6 +860,209 @@ def brevo_uninstalled_user_removal():
             logging.info(f"Contacts successfully added to list ID {list_id_add}. Status: {response_add.text}")
         except requests.exceptions.RequestException as e:
             logging.error(f"Failed to add contacts. Error: {e}. Response: {response_add.text}")
+
+def update_intercom_conversations_weekly():
+    url = "https://api.intercom.io/conversations/search"
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s]: %(message)s', handlers=[logging.StreamHandler()])
+    est = pytz.timezone('US/Eastern')
+
+    # Get the current UTC time
+    now = datetime.datetime.now(datetime.timezone.utc)
+    # Calculate the start of 7 days ago (00:00:00 UTC) and convert to EST
+    seven_days_ago_start = datetime.datetime.combine(
+        (now - datetime.timedelta(days=7)).date(),
+        datetime.datetime.min.time(),
+        tzinfo=datetime.timezone.utc
+    )
+    created_at_min = int(seven_days_ago_start.astimezone(est).timestamp())
+    # Calculate the end of yesterday (23:59:59 UTC) and convert to EST
+    yesterday_end = datetime.datetime.combine(
+        (now - datetime.timedelta(days=1)).date(),
+        datetime.datetime.max.time(),
+        tzinfo=datetime.timezone.utc
+    )
+    created_at_max = int(yesterday_end.astimezone(est).timestamp())
+    df_conversations = pd.DataFrame()    
+
+    for app in APPS_CONFIG:
+        next_page_params = None
+        conversations = []
+        test_conversations = []
+
+        while True:
+  
+            headers = {
+                # "Content-Type": "application/json",
+                'Accept': 'application/json',
+                "Intercom-Version": "2.10",
+                "Authorization": app['api_icm_token']
+            }
+
+            payload = {
+                "query": {
+                    "operator": "AND",
+                    "value": [
+                    {
+                        "field": "created_at",
+                        "operator": ">=",
+                        "value": created_at_min # Unix Timestamp for initial date
+                    },
+                    {
+                        "field": "created_at",
+                        "operator": "<=",
+                        "value": created_at_max # Unix Timestamp for final date
+                    },
+                    {
+                        "field": "source.type",
+                        "operator": "!=",
+                        "value": None # Unix Timestamp for final date
+                    }
+                    ]
+                },
+                "pagination": {
+                    "per_page": 150,
+                    "starting_after": next_page_params
+                    } 
+            }
+
+            response = requests.post(url, json=payload, headers=headers)
+            time.sleep(0.1)
+            if response.status_code != 200:
+                logging.error(f"Error: {response.status_code}")
+                continue
+
+            data_temp = response.json()
+            next_page_params = data_temp.get('pages',{}).get('next',{}).get('starting_after')
+            conversations.extend(data_temp.get('conversations',{}))
+            logging.info(f"conversations fetched: {len(conversations)}")
+            if not next_page_params:
+                break  # Exit the loop if there are no more pages.
+
+        # 1-app type df
+        if app['app_name'] == "ICU" or app['app_name'] == "TFX" or app['app_name'] == "PC":
+            for conversation in conversations:
+                id = conversation.get('id')
+                status = conversation.get('state')
+                created_at = conversation.get('created_at')
+                updated_at = conversation.get('updated_at')
+                source_type = conversation.get('source',{}).get('type')
+                source_subject = conversation.get('source',{}).get('subject')
+                source_body = conversation.get('source',{}).get('body')
+                delivered_as = conversation.get('source',{}).get('delivered_as')
+                author_type = conversation.get('source',{}).get('author',{}).get('type')
+                author_id = conversation.get('source',{}).get('author',{}).get('id')
+                author_name = conversation.get('source',{}).get('author',{}).get('name')
+                author_email = conversation.get('source',{}).get('author',{}).get('email')
+                admin_assignee_id = conversation.get('admin_assignee_id')
+                source_url = conversation.get('source',{}).get('url')
+                symptom = conversation.get('custom_attributes',{}).get('Symptom')
+                symptom_details = conversation.get('custom_attributes',{}).get('Symptom Details')
+                diagnosis = conversation.get('custom_attributes',{}).get('Diagnosis')
+                diagnosis_details = conversation.get('custom_attributes',{}).get('Diagnosis Details')
+                
+                test_conversations.append({
+                    'id': id,
+                    'status': status,
+                    'created_at': created_at,
+                    'updated_at' : updated_at,
+                    'source_type': source_type,
+                    'source_subject': source_subject,
+                    'source_body': source_body,
+                    'delivered_as': delivered_as,
+                    'author_type': author_type,
+                    'author_id': author_id,
+                    'author_name': author_name,
+                    'author_email': author_email,
+                    'admin_assignee_id': str(admin_assignee_id),
+                    'source_url': source_url,
+                    'symptom': symptom,
+                    'symptom_details': symptom_details,
+                    'diagnosis': diagnosis,
+                    'diagnosis_details': diagnosis_details
+                })
+            df_temp = pd.DataFrame(test_conversations)
+            df_temp['app'] = 'ICU' if app['app_name'] == "ICU" else 'TFX' if app['app_name'] == "TFX" else 'PC'
+
+        # 2-app type df 
+        if app['app_name'] == "COD":
+            
+            for conversation in conversations:
+            
+                id = conversation.get('id')
+                status = conversation.get('state')
+                created_at = conversation.get('created_at')
+                updated_at = conversation.get('updated_at')
+                source_type = conversation.get('source',{}).get('type')
+                source_subject = conversation.get('source',{}).get('subject')
+                source_body = conversation.get('source',{}).get('body')
+                delivered_as = conversation.get('source',{}).get('delivered_as')
+                author_type = conversation.get('source',{}).get('author',{}).get('type')
+                author_id = conversation.get('source',{}).get('author',{}).get('id')
+                author_name = conversation.get('source',{}).get('author',{}).get('name')
+                author_email = conversation.get('source',{}).get('author',{}).get('email')
+                admin_assignee_id = conversation.get('admin_assignee_id')
+                symptom = conversation.get('custom_attributes',{}).get('Symptom')
+                symptom_details = conversation.get('custom_attributes',{}).get('Symptom Details')
+                source_url = conversation.get('source',{}).get('url')
+                diagnosis = conversation.get('custom_attributes',{}).get('Diagnosis')
+                diagnosis_details = conversation.get('custom_attributes',{}).get('Diagnosis Details')
+                app_source = conversation.get('custom_attributes',{}).get('App Name')
+                app = 'SATC' if app_source=='Sticky' else 'SR'
+                
+                test_conversations.append({
+                    'id': id,
+                    'status': status,
+                    'created_at': created_at,
+                    'updated_at' : updated_at,
+                    'source_type': source_type,
+                    'source_subject': source_subject,
+                    'source_body': source_body,
+                    'delivered_as': delivered_as,
+                    'author_type': author_type,
+                    'author_id': author_id,
+                    'author_name': author_name,
+                    'author_email': author_email,
+                    'admin_assignee_id': str(admin_assignee_id),
+                    'source_url': source_url,
+                    'symptom': symptom,
+                    'symptom_details': symptom_details,
+                    'diagnosis': diagnosis,
+                    'diagnosis_details': diagnosis_details,
+                    'app': app
+                })
+            df_temp = pd.DataFrame(test_conversations)
+            
+        #Appends the temporary dataframe to the main one
+        df_conversations = pd.concat([df_conversations, df_temp], ignore_index=True)
+        logging.info(f"Partner processed. Total {len(conversations)} conversations")
+
+    logging.info(f"Done! Total conversations: {len(df_conversations)}")
+
+    # Update these columns to datetime instead of Unix timestamps
+    df_conversations['created_at'] = pd.to_datetime(df_conversations['created_at'], unit='s')
+    df_conversations['created_at'] = df_conversations['created_at'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')
+    df_conversations['updated_at'] = pd.to_datetime(df_conversations['updated_at'], unit='s')
+    df_conversations['updated_at'] = df_conversations['updated_at'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')
+    print(f"Convo dataset ready, Total conversations: {len(df_conversations)}")
+    #insert_into_db_conversations(df_conversations)
+
+
+def insert_into_db_conversations(df):
+    i = 1
+    conn = connect_to_db()
+    if conn is not None:
+        cursor = conn.cursor()
+        insert_query = sql.SQL("INSERT INTO intercom_conversations (id, status, created_at, updated_at, source_type, source_subject, source_body, delivered_as, author_type, author_id, author_name, author_email, admin_assignee_id,source_url, symptom, symptom_details, diagnosis, diagnosis_details, app) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
+        for index, row in df.iterrows():
+            cursor.execute(insert_query, (row['id'], row['status'], row['created_at'], row['updated_at'], row['source_type'], row['source_subject'], row['source_body'], row['delivered_as'], row['author_type'], row['author_id'], row['author_name'], row['author_email'], row['admin_assignee_id'], row['source_url'], row['symptom'], row['symptom_details'], row['diagnosis'], row['diagnosis_details'], row['app']))           
+            logging.info(f"{i}/{len(df)}")
+            i += 1
+        conn.commit()
+        cursor.close()
+        conn.close()
+        logging.info("Done!")
+    else:
+        logging.info("Failed to insert data into the database.")
 
 def update_coupons_data():
     conn = connect_to_db()  # Replace with your actual connection function
