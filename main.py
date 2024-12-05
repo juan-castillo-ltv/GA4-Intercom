@@ -1050,7 +1050,7 @@ def update_intercom_conversations_weekly():
     df_conversations['updated_at'] = pd.to_datetime(df_conversations['updated_at'], unit='s')
     df_conversations['updated_at'] = df_conversations['updated_at'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')
     logging.info(f"Convo dataset ready, Total conversations: {len(df_conversations)}")
-    #insert_into_db_conversations(df_conversations)
+    insert_into_db_conversations(df_conversations)
 
 
 def insert_into_db_conversations(df):
@@ -2056,7 +2056,7 @@ if __name__ == "__main__":
     scheduler = BlockingScheduler()
 
     # Immediate execution upon deployment
-    update_intercom_conversations_weekly()
+    
     #time.sleep(int(OFFSET_BT_SCRIPTS))
     
     # Schedule the tasks to run daily at 12:00 PM UTC TIME
@@ -2065,6 +2065,7 @@ if __name__ == "__main__":
     scheduler.add_job(fetch_intercom_contacts, 'cron', hour=10, minute=0)
     scheduler.add_job(update_coupons_data, 'cron', hour=10, minute=2)
     scheduler.add_job(update_intercom_contacts, 'cron', hour=10, minute=8)
+    scheduler.add_job(update_intercom_conversations_weekly, 'cron', day_of_week='mon', hour=10, minute=10)
     scheduler.add_job(add_emails_to_google_and_meta_ads, 'cron', hour=13, minute=30)
     scheduler.add_job(remove_emails_from_google_and_meta_ads, 'cron', hour=13, minute=32)
     scheduler.add_job(fetch_update_brevo_contacts, 'cron', hour=13, minute=34)
