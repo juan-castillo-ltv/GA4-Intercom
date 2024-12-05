@@ -890,159 +890,157 @@ def update_intercom_conversations_weekly():
      
 
     for app in APPS_CONFIG:
-        next_page_params = None
-        conversations = []
-        test_conversations = []
+        if app['app_name'] != 'SR': # SR and SATC repeat the same data, so only need to update once
+            next_page_params = None
+            conversations = []
+            test_conversations = []
 
-        while True:
-  
-            headers = {
-                # "Content-Type": "application/json",
-                'Accept': 'application/json',
-                "Intercom-Version": "2.10",
-                "Authorization": app['api_icm_token']
-            }
+            while True:
+    
+                headers = {
+                    # "Content-Type": "application/json",
+                    'Accept': 'application/json',
+                    "Intercom-Version": "2.10",
+                    "Authorization": app['api_icm_token']
+                }
 
-            payload = {
-                "query": {
-                    "operator": "AND",
-                    "value": [
-                    {
-                        "field": "created_at",
-                        "operator": ">=",
-                        "value": created_at_min # Unix Timestamp for initial date
+                payload = {
+                    "query": {
+                        "operator": "AND",
+                        "value": [
+                        {
+                            "field": "created_at",
+                            "operator": ">=",
+                            "value": created_at_min # Unix Timestamp for initial date
+                        },
+                        {
+                            "field": "created_at",
+                            "operator": "<=",
+                            "value": created_at_max # Unix Timestamp for final date
+                        },
+                        {
+                            "field": "source.type",
+                            "operator": "!=",
+                            "value": None # Unix Timestamp for final date
+                        }
+                        ]
                     },
-                    {
-                        "field": "created_at",
-                        "operator": "<=",
-                        "value": created_at_max # Unix Timestamp for final date
-                    },
-                    {
-                        "field": "source.type",
-                        "operator": "!=",
-                        "value": None # Unix Timestamp for final date
-                    }
-                    ]
-                },
-                "pagination": {
-                    "per_page": 150,
-                    "starting_after": next_page_params
-                    } 
-            }
+                    "pagination": {
+                        "per_page": 150,
+                        "starting_after": next_page_params
+                        } 
+                }
 
-            response = requests.post(url, json=payload, headers=headers)
-            time.sleep(0.1)
-            if response.status_code != 200:
-                logging.error(f"Error: {response.status_code}")
-                continue
+                response = requests.post(url, json=payload, headers=headers)
+                time.sleep(0.1)
+                if response.status_code != 200:
+                    logging.error(f"Error: {response.status_code}")
+                    continue
 
-            data_temp = response.json()
-            next_page_params = data_temp.get('pages',{}).get('next',{}).get('starting_after')
-            conversations.extend(data_temp.get('conversations',{}))
-            logging.info(f"conversations fetched: {len(conversations)}")
-            if not next_page_params:
-                break  # Exit the loop if there are no more pages.
+                data_temp = response.json()
+                next_page_params = data_temp.get('pages',{}).get('next',{}).get('starting_after')
+                conversations.extend(data_temp.get('conversations',{}))
+                logging.info(f"conversations fetched: {len(conversations)}")
+                if not next_page_params:
+                    break  # Exit the loop if there are no more pages.
 
-        # 1-app type df
-        if app['app_name'] == "ICU" or app['app_name'] == "TFX" or app['app_name'] == "PC":
-            for conversation in conversations:
-                id = conversation.get('id')
-                status = conversation.get('state')
-                created_at = conversation.get('created_at')
-                updated_at = conversation.get('updated_at')
-                source_type = conversation.get('source',{}).get('type')
-                source_subject = conversation.get('source',{}).get('subject')
-                source_body = conversation.get('source',{}).get('body')
-                delivered_as = conversation.get('source',{}).get('delivered_as')
-                author_type = conversation.get('source',{}).get('author',{}).get('type')
-                author_id = conversation.get('source',{}).get('author',{}).get('id')
-                author_name = conversation.get('source',{}).get('author',{}).get('name')
-                author_email = conversation.get('source',{}).get('author',{}).get('email')
-                admin_assignee_id = conversation.get('admin_assignee_id')
-                source_url = conversation.get('source',{}).get('url')
-                symptom = conversation.get('custom_attributes',{}).get('Symptom')
-                symptom_details = conversation.get('custom_attributes',{}).get('Symptom Details')
-                diagnosis = conversation.get('custom_attributes',{}).get('Diagnosis')
-                diagnosis_details = conversation.get('custom_attributes',{}).get('Diagnosis Details')
+            # 1-app type df
+            if app['app_name'] == "ICU" or app['app_name'] == "TFX" or app['app_name'] == "PC":
+                for conversation in conversations:
+                    id = conversation.get('id')
+                    status = conversation.get('state')
+                    created_at = conversation.get('created_at')
+                    updated_at = conversation.get('updated_at')
+                    source_type = conversation.get('source',{}).get('type')
+                    source_subject = conversation.get('source',{}).get('subject')
+                    source_body = conversation.get('source',{}).get('body')
+                    delivered_as = conversation.get('source',{}).get('delivered_as')
+                    author_type = conversation.get('source',{}).get('author',{}).get('type')
+                    author_id = conversation.get('source',{}).get('author',{}).get('id')
+                    author_name = conversation.get('source',{}).get('author',{}).get('name')
+                    author_email = conversation.get('source',{}).get('author',{}).get('email')
+                    admin_assignee_id = conversation.get('admin_assignee_id')
+                    source_url = conversation.get('source',{}).get('url')
+                    symptom = conversation.get('custom_attributes',{}).get('Symptom')
+                    symptom_details = conversation.get('custom_attributes',{}).get('Symptom Details')
+                    diagnosis = conversation.get('custom_attributes',{}).get('Diagnosis')
+                    diagnosis_details = conversation.get('custom_attributes',{}).get('Diagnosis Details')
+                    
+                    test_conversations.append({
+                        'id': id,
+                        'status': status,
+                        'created_at': created_at,
+                        'updated_at' : updated_at,
+                        'source_type': source_type,
+                        'source_subject': source_subject,
+                        'source_body': source_body,
+                        'delivered_as': delivered_as,
+                        'author_type': author_type,
+                        'author_id': author_id,
+                        'author_name': author_name,
+                        'author_email': author_email,
+                        'admin_assignee_id': str(admin_assignee_id),
+                        'source_url': source_url,
+                        'symptom': symptom,
+                        'symptom_details': symptom_details,
+                        'diagnosis': diagnosis,
+                        'diagnosis_details': diagnosis_details
+                    })
+                df_temp = pd.DataFrame(test_conversations)
+                df_temp['app'] = 'ICU' if app['app_name'] == "ICU" else 'TFX' if app['app_name'] == "TFX" else 'PC'
+
+            # 2-app type df 
+            if app['app_name'] == "SATC":
                 
-                test_conversations.append({
-                    'id': id,
-                    'status': status,
-                    'created_at': created_at,
-                    'updated_at' : updated_at,
-                    'source_type': source_type,
-                    'source_subject': source_subject,
-                    'source_body': source_body,
-                    'delivered_as': delivered_as,
-                    'author_type': author_type,
-                    'author_id': author_id,
-                    'author_name': author_name,
-                    'author_email': author_email,
-                    'admin_assignee_id': str(admin_assignee_id),
-                    'source_url': source_url,
-                    'symptom': symptom,
-                    'symptom_details': symptom_details,
-                    'diagnosis': diagnosis,
-                    'diagnosis_details': diagnosis_details
-                })
-            df_temp = pd.DataFrame(test_conversations)
-            df_temp['app'] = 'ICU' if app['app_name'] == "ICU" else 'TFX' if app['app_name'] == "TFX" else 'PC'
-
-        # 2-app type df 
-        if app['app_name'] == "SATC":
-            
-            for conversation in conversations:
-            
-                id = conversation.get('id')
-                status = conversation.get('state')
-                created_at = conversation.get('created_at')
-                updated_at = conversation.get('updated_at')
-                source_type = conversation.get('source',{}).get('type')
-                source_subject = conversation.get('source',{}).get('subject')
-                source_body = conversation.get('source',{}).get('body')
-                delivered_as = conversation.get('source',{}).get('delivered_as')
-                author_type = conversation.get('source',{}).get('author',{}).get('type')
-                author_id = conversation.get('source',{}).get('author',{}).get('id')
-                author_name = conversation.get('source',{}).get('author',{}).get('name')
-                author_email = conversation.get('source',{}).get('author',{}).get('email')
-                admin_assignee_id = conversation.get('admin_assignee_id')
-                symptom = conversation.get('custom_attributes',{}).get('Symptom')
-                symptom_details = conversation.get('custom_attributes',{}).get('Symptom Details')
-                source_url = conversation.get('source',{}).get('url')
-                diagnosis = conversation.get('custom_attributes',{}).get('Diagnosis')
-                diagnosis_details = conversation.get('custom_attributes',{}).get('Diagnosis Details')
-                app_source = conversation.get('custom_attributes',{}).get('App Name')
-                app = 'SATC' if app_source=='Sticky' else 'SR'
+                for conversation in conversations:
                 
-                test_conversations.append({
-                    'id': id,
-                    'status': status,
-                    'created_at': created_at,
-                    'updated_at' : updated_at,
-                    'source_type': source_type,
-                    'source_subject': source_subject,
-                    'source_body': source_body,
-                    'delivered_as': delivered_as,
-                    'author_type': author_type,
-                    'author_id': author_id,
-                    'author_name': author_name,
-                    'author_email': author_email,
-                    'admin_assignee_id': str(admin_assignee_id),
-                    'source_url': source_url,
-                    'symptom': symptom,
-                    'symptom_details': symptom_details,
-                    'diagnosis': diagnosis,
-                    'diagnosis_details': diagnosis_details,
-                    'app': app
-                })
-            df_temp = pd.DataFrame(test_conversations)
+                    id = conversation.get('id')
+                    status = conversation.get('state')
+                    created_at = conversation.get('created_at')
+                    updated_at = conversation.get('updated_at')
+                    source_type = conversation.get('source',{}).get('type')
+                    source_subject = conversation.get('source',{}).get('subject')
+                    source_body = conversation.get('source',{}).get('body')
+                    delivered_as = conversation.get('source',{}).get('delivered_as')
+                    author_type = conversation.get('source',{}).get('author',{}).get('type')
+                    author_id = conversation.get('source',{}).get('author',{}).get('id')
+                    author_name = conversation.get('source',{}).get('author',{}).get('name')
+                    author_email = conversation.get('source',{}).get('author',{}).get('email')
+                    admin_assignee_id = conversation.get('admin_assignee_id')
+                    symptom = conversation.get('custom_attributes',{}).get('Symptom')
+                    symptom_details = conversation.get('custom_attributes',{}).get('Symptom Details')
+                    source_url = conversation.get('source',{}).get('url')
+                    diagnosis = conversation.get('custom_attributes',{}).get('Diagnosis')
+                    diagnosis_details = conversation.get('custom_attributes',{}).get('Diagnosis Details')
+                    app_source = conversation.get('custom_attributes',{}).get('App Name')
+                    app = 'SATC' if app_source=='Sticky' else 'SR'
+                    
+                    test_conversations.append({
+                        'id': id,
+                        'status': status,
+                        'created_at': created_at,
+                        'updated_at' : updated_at,
+                        'source_type': source_type,
+                        'source_subject': source_subject,
+                        'source_body': source_body,
+                        'delivered_as': delivered_as,
+                        'author_type': author_type,
+                        'author_id': author_id,
+                        'author_name': author_name,
+                        'author_email': author_email,
+                        'admin_assignee_id': str(admin_assignee_id),
+                        'source_url': source_url,
+                        'symptom': symptom,
+                        'symptom_details': symptom_details,
+                        'diagnosis': diagnosis,
+                        'diagnosis_details': diagnosis_details,
+                        'app': app
+                    })
+                df_temp = pd.DataFrame(test_conversations)
 
-        else:
-            df_temp = pd.DataFrame()
-
-        #Appends the temporary dataframe to the main one
-        df_conversations = pd.concat([df_conversations, df_temp], ignore_index=True)
-        logging.info(f"Partner processed. Total {len(conversations)} conversations")
+            #Appends the temporary dataframe to the main one
+            df_conversations = pd.concat([df_conversations, df_temp], ignore_index=True)
+            logging.info(f"Partner processed. Total {len(conversations)} conversations")
 
     logging.info(f"Done! Total conversations: {len(df_conversations)}")
 
