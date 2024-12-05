@@ -866,25 +866,28 @@ def update_intercom_conversations_weekly():
     est = pytz.timezone('US/Eastern')
 
     # Get the current UTC time
-    now = datetime.datetime.now(datetime.timezone.utc)
-    # Calculate the start of 7 days ago (00:00:00 UTC) and convert to EST
+    now = datetime.datetime.now(pytz.timezone('US/Eastern'))
+
     seven_days_ago_start = datetime.datetime.combine(
         (now - datetime.timedelta(days=7)).date(),
         datetime.datetime.min.time(),
-        tzinfo=datetime.timezone.utc
+        tzinfo=pytz.timezone('US/Eastern')
     )
     created_at_min = int(seven_days_ago_start.astimezone(est).timestamp())
-    # Calculate the end of yesterday (23:59:59 UTC) and convert to EST
+
     yesterday_end = datetime.datetime.combine(
         (now - datetime.timedelta(days=1)).date(),
         datetime.datetime.max.time(),
-        tzinfo=datetime.timezone.utc
+        tzinfo=pytz.timezone('US/Eastern')
     )
     created_at_max = int(yesterday_end.astimezone(est).timestamp())
-    df_conversations = pd.DataFrame()   
+    df_conversations = pd.DataFrame()
 
     logging.info(created_at_min) 
-    logging.info(created_at_max) 
+    logging.info(seven_days_ago_start)
+    logging.info(created_at_max)
+    logging.info(yesterday_end)
+     
 
     for app in APPS_CONFIG:
         next_page_params = None
