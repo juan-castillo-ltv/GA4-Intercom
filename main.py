@@ -989,7 +989,7 @@ def update_intercom_conversations_weekly():
             df_temp['app'] = 'ICU' if app['app_name'] == "ICU" else 'TFX' if app['app_name'] == "TFX" else 'PC'
 
         # 2-app type df 
-        if app['app_name'] == "COD":
+        if app['app_name'] == "SATC":
             
             for conversation in conversations:
             
