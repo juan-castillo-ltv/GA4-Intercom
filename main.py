@@ -1036,7 +1036,10 @@ def update_intercom_conversations_weekly():
                     'app': app
                 })
             df_temp = pd.DataFrame(test_conversations)
-            
+
+        else:
+            df_temp = pd.DataFrame()
+
         #Appends the temporary dataframe to the main one
         df_conversations = pd.concat([df_conversations, df_temp], ignore_index=True)
         logging.info(f"Partner processed. Total {len(conversations)} conversations")
